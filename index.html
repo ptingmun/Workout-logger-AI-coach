@@ -111,7 +111,7 @@
         <!-- ============================================== -->
         <div id="content-log" class="tab-content block space-y-4">
             
-            <!-- Date & Garmin Calorie Burn Card -->
+            <!-- Date & Garmin Calorie Burn Card (Independent) -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -123,7 +123,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div class="flex flex-col">
                         <label class="h-5 flex items-center text-[11px] font-bold text-gray-400 uppercase mb-1.5">Date</label>
-                        <input type="date" id="session-date" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-primary outline-none transition-all">
+                        <input type="date" id="garmin-date" onchange="onGarminDateChange()" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-garmin outline-none transition-all">
                     </div>
                     <div class="flex flex-col">
                         <label class="h-5 flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase mb-1.5">
@@ -131,10 +131,17 @@
                             <span class="text-[10px] text-sky-600 font-semibold lowercase shrink-0 ml-1">kcal</span>
                         </label>
                         <div class="relative w-full">
-                            <input type="number" id="session-garmin-calories" min="0" placeholder="e.g. 2450" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 pl-8 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-garmin outline-none transition-all">
+                            <input type="number" id="garmin-calories" min="0" placeholder="e.g. 2450" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 pl-8 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-garmin outline-none transition-all">
                             <i class="ph-fill ph-flame text-sky-500 absolute left-2.5 top-1/2 -translate-y-1/2 text-base pointer-events-none"></i>
                         </div>
                     </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                    <span id="garmin-saved-status" class="text-[11px] text-gray-400 font-medium">No calories saved for this date</span>
+                    <button type="button" onclick="saveGarminCalories()" class="bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-bold py-2 px-3.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-sm">
+                        <i class="ph-bold ph-check"></i> Save Daily Burn
+                    </button>
                 </div>
             </div>
 
@@ -159,15 +166,21 @@
                 </div>
             </div>
 
-            <!-- Add Individual Exercise Form -->
+            <!-- Add Individual Exercise Form (With Dedicated Workout Date) -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3.5">
                 <div class="flex items-center justify-between">
                     <h3 class="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                        <i class="ph-bold ph-plus-circle text-primary text-base"></i> Add Exercise to Today
+                        <i class="ph-bold ph-barbell text-primary text-base"></i> Workout Session
                     </h3>
                     <button type="button" onclick="toggleCustomExerciseInput()" id="btn-toggle-custom" class="text-[11px] font-semibold text-primary hover:underline">
                         + New Custom Name
                     </button>
+                </div>
+
+                <!-- Workout Date Picker -->
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1.5">Workout Date</label>
+                    <input type="date" id="workout-date" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-primary outline-none transition-all">
                 </div>
 
                 <!-- Standardized Select or Custom Text -->
@@ -227,7 +240,7 @@
 
                 <!-- Commit session button -->
                 <button type="button" onclick="commitFullSession()" id="btn-commit-session" disabled class="w-full bg-primary hover:bg-primaryDark disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-100 disabled:shadow-none">
-                    <i class="ph-bold ph-floppy-disk"></i> Save Complete Workout Session
+                    <i class="ph-bold ph-floppy-disk"></i> Save Workout Session
                 </button>
             </div>
 
@@ -545,9 +558,10 @@
         };
 
         function initApp() {
-            // Default date input to today in local timezone
+            // Default date inputs to today in local timezone
             const todayStr = new Date().toISOString().split('T')[0];
-            document.getElementById('session-date').value = todayStr;
+            document.getElementById('garmin-date').value = todayStr;
+            document.getElementById('workout-date').value = todayStr;
 
             // Load stored exercise library
             const savedExercises = localStorage.getItem('fittrack_exercise_library');
@@ -589,12 +603,65 @@
                 document.getElementById('input-gemini-key').value = savedKey;
             }
 
-            // Populate UI components
+            // Populate UI components and check existing calories for selected date
+            onGarminDateChange();
             refreshExerciseDropdown();
             renderDraftList();
             renderHistoryTab();
             renderSettingsLibrary();
             populateChartExerciseFilter();
+        }
+
+        function onGarminDateChange() {
+            const dateVal = document.getElementById('garmin-date').value;
+            const statusLabel = document.getElementById('garmin-saved-status');
+            const calInput = document.getElementById('garmin-calories');
+
+            if (!dateVal) {
+                statusLabel.textContent = 'Please select a date';
+                return;
+            }
+
+            const existingEntry = sessionLogs.find(s => s.date === dateVal);
+            if (existingEntry && existingEntry.garminCalories > 0) {
+                calInput.value = existingEntry.garminCalories;
+                statusLabel.innerHTML = `<span class="text-emerald-600 font-semibold"><i class="ph ph-check-circle"></i> Logged: ${existingEntry.garminCalories.toLocaleString()} kcal</span>`;
+            } else {
+                calInput.value = '';
+                statusLabel.textContent = 'No calories saved for this date';
+            }
+        }
+
+        function saveGarminCalories() {
+            const dateVal = document.getElementById('garmin-date').value;
+            const calVal = parseInt(document.getElementById('garmin-calories').value);
+
+            if (!dateVal) {
+                showToast('Please choose a date for Garmin calories', 'error');
+                return;
+            }
+
+            if (isNaN(calVal) || calVal < 0) {
+                showToast('Please enter a valid calorie burn number', 'error');
+                return;
+            }
+
+            const existingIndex = sessionLogs.findIndex(s => s.date === dateVal);
+            if (existingIndex > -1) {
+                sessionLogs[existingIndex].garminCalories = calVal;
+            } else {
+                sessionLogs.push({
+                    id: 'session_' + Date.now().toString(36),
+                    date: dateVal,
+                    garminCalories: calVal,
+                    timestamp: Date.now(),
+                    exercises: []
+                });
+            }
+
+            saveSessionLogs();
+            onGarminDateChange();
+            showToast(`Saved ${calVal.toLocaleString()} kcal for ${dateVal}`, 'success');
         }
 
         function migrateLegacyData(legacyItems) {
@@ -784,11 +851,10 @@
         }
 
         function commitFullSession() {
-            const dateVal = document.getElementById('session-date').value;
-            const garminCalVal = parseInt(document.getElementById('session-garmin-calories').value) || 0;
+            const dateVal = document.getElementById('workout-date').value;
 
             if (!dateVal) {
-                showToast('Please select a session date', 'error');
+                showToast('Please select a workout date', 'error');
                 return;
             }
 
@@ -797,21 +863,18 @@
                 return;
             }
 
-            // Check if a session on this date already exists; if so, offer to merge or update
+            // Check if a session or calorie entry on this workout date already exists
             const existingIndex = sessionLogs.findIndex(s => s.date === dateVal);
             if (existingIndex > -1) {
-                // Merge exercises and update calories if entered
+                // Merge exercises into that day's entry
                 sessionLogs[existingIndex].exercises.push(...currentDraftExercises.map(e => ({
                     name: e.name, sets: e.sets, reps: e.reps, weight: e.weight
                 })));
-                if (garminCalVal > 0) {
-                    sessionLogs[existingIndex].garminCalories = garminCalVal;
-                }
             } else {
                 sessionLogs.push({
                     id: 'session_' + Date.now().toString(36),
                     date: dateVal,
-                    garminCalories: garminCalVal,
+                    garminCalories: 0,
                     timestamp: Date.now(),
                     exercises: currentDraftExercises.map(e => ({
                         name: e.name, sets: e.sets, reps: e.reps, weight: e.weight
@@ -821,12 +884,11 @@
 
             saveSessionLogs();
 
-            // Clear draft and calorie input
+            // Clear draft
             currentDraftExercises = [];
-            document.getElementById('session-garmin-calories').value = '';
             renderDraftList();
 
-            showToast('Workout session saved successfully!', 'success');
+            showToast(`Workout saved for ${dateVal}!`, 'success');
         }
 
         async function parseNaturalLanguageWorkout() {
@@ -893,7 +955,7 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                     const parsed = JSON.parse(jsonText);
                     
                     if (parsed.garminCalories && parsed.garminCalories > 0) {
-                        document.getElementById('session-garmin-calories').value = parsed.garminCalories;
+                        document.getElementById('garmin-calories').value = parsed.garminCalories;
                     }
 
                     if (parsed.exercises && parsed.exercises.length > 0) {
@@ -933,14 +995,14 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
             const container = document.getElementById('history-grouped-container');
             const totalLabel = document.getElementById('history-total-sessions');
 
-            totalLabel.textContent = `${sessionLogs.length} session${sessionLogs.length === 1 ? '' : 's'}`;
+            totalLabel.textContent = `${sessionLogs.length} date entries`;
 
             if (sessionLogs.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">
                         <i class="ph ph-calendar-blank text-4xl text-gray-300 mb-2"></i>
-                        <p class="text-sm font-semibold text-gray-600">No workout history yet</p>
-                        <p class="text-xs text-gray-400 mt-0.5">Your logged daily sessions will appear here.</p>
+                        <p class="text-sm font-semibold text-gray-600">No logs recorded yet</p>
+                        <p class="text-xs text-gray-400 mt-0.5">Your workout and calorie records will appear here.</p>
                     </div>
                 `;
                 return;
@@ -949,7 +1011,7 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
             let html = '';
             sessionLogs.forEach((session, sessionIdx) => {
                 let sessionVolume = 0;
-                session.exercises.forEach(e => {
+                (session.exercises || []).forEach(e => {
                     sessionVolume += (e.sets * e.reps * e.weight);
                 });
 
@@ -957,41 +1019,54 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
                 });
 
+                const hasExercises = session.exercises && session.exercises.length > 0;
+                const hasGarmin = session.garminCalories && session.garminCalories > 0;
+
                 html += `
                     <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
                         <div class="flex items-center justify-between border-b border-gray-100 pb-2.5">
                             <div>
                                 <span class="text-xs font-black text-gray-900">${formattedDate}</span>
-                                <p class="text-[11px] text-gray-400 font-medium">${session.exercises.length} exercises logged</p>
+                                <p class="text-[11px] text-gray-400 font-medium">
+                                    ${hasExercises ? `${session.exercises.length} exercises logged` : 'Rest / Garmin-only day'}
+                                </p>
                             </div>
                             <div class="flex items-center gap-2">
-                                ${session.garminCalories > 0 ? `
+                                ${hasGarmin ? `
                                     <span class="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100 flex items-center gap-1" title="Garmin Total Daily Burn (Active + Resting)">
-                                        <i class="ph-fill ph-flame text-sky-500"></i> ${session.garminCalories.toLocaleString()} kcal total
+                                        <i class="ph-fill ph-flame text-sky-500"></i> ${session.garminCalories.toLocaleString()} kcal
                                     </span>
                                 ` : ''}
-                                <span class="text-xs font-bold text-primary bg-indigo-50 px-2 py-0.5 rounded-md">
-                                    ${sessionVolume.toLocaleString()} kg
-                                </span>
+                                ${hasExercises ? `
+                                    <span class="text-xs font-bold text-primary bg-indigo-50 px-2 py-0.5 rounded-md">
+                                        ${sessionVolume.toLocaleString()} kg
+                                    </span>
+                                ` : ''}
                                 <button onclick="deleteSession(${sessionIdx})" class="text-gray-300 hover:text-red-500 p-1">
                                     <i class="ph-bold ph-trash text-sm"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Exercise details table -->
-                        <div class="space-y-1.5">
-                            ${session.exercises.map(ex => `
-                                <div class="flex justify-between items-center text-xs py-1 border-b border-gray-50 last:border-0">
-                                    <span class="font-semibold text-gray-700">${ex.name}</span>
-                                    <div class="text-gray-500">
-                                        <span class="font-medium">${ex.sets} &times; ${ex.reps}</span> 
-                                        <span class="text-gray-300 mx-1">@</span> 
-                                        <span class="font-bold text-gray-800">${ex.weight} kg</span>
+                        <!-- Exercise details table or rest day notice -->
+                        ${hasExercises ? `
+                            <div class="space-y-1.5">
+                                ${session.exercises.map(ex => `
+                                    <div class="flex justify-between items-center text-xs py-1 border-b border-gray-50 last:border-0">
+                                        <span class="font-semibold text-gray-700">${ex.name}</span>
+                                        <div class="text-gray-500">
+                                            <span class="font-medium">${ex.sets} &times; ${ex.reps}</span> 
+                                            <span class="text-gray-300 mx-1">@</span> 
+                                            <span class="font-bold text-gray-800">${ex.weight} kg</span>
+                                        </div>
                                     </div>
-                                </div>
-                            `).join('')}
-                        </div>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <p class="text-[11px] text-gray-400 italic py-1 flex items-center gap-1.5">
+                                <i class="ph ph-bed"></i> No resistance exercises recorded for this day.
+                            </p>
+                        `}
                     </div>
                 `;
             });
