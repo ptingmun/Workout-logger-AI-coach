@@ -1,580 +1,571 @@
-<!DOCTYPE html>
-<html lang="en">
+
+<html lang="en" class="h-full bg-slate-50">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>FitTrack - Workout Logger & AI Coach</title>
     
-    <!-- iOS Web App Meta Tags -->
+    <!-- iOS Web App Configuration -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="FitTrack AI">
-    
-    <title>FitTrack - Workout & Calorie Tracker with AI</title>
-    
-    <!-- Tailwind CSS -->
+    <meta name="apple-mobile-web-app-title" content="FitTrack">
+    <meta name="theme-color" content="#0F172A">
+
+    <!-- Fonts & Tailwind CSS CDN -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Chart.js for volume and calorie visualization -->
+    <!-- Phosphor Icons CSS (Direct stylesheet links to prevent ES-module export syntax errors) -->
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+
+    <!-- Chart.js & Marked.js for Data Visuals & AI Markdown -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    
-    <!-- Marked for Markdown parsing -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        primary: '#4F46E5', // Indigo 600
-                        primaryDark: '#4338CA',
-                        garmin: '#0284C7', // Sky 600 for Garmin metrics
-                        accent: '#8B5CF6', // Purple
-                        iosbg: '#F2F2F7',
-                        cardbg: '#FFFFFF'
-                    },
                     fontFamily: {
-                        sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'sans-serif'],
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        }
                     }
                 }
             }
         }
     </script>
-    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        body { 
-            font-family: '-apple-system', 'BlinkMacSystemFont', 'Inter', sans-serif; 
-            background-color: #F2F2F7;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        /* Mobile tab styling */
-        .tab-active { color: #4F46E5; }
-        .tab-inactive { color: #9CA3AF; }
-        
-        /* Hide scrollbars for app-like presentation */
-        ::-webkit-scrollbar { display: none; }
-        
-        /* Spinning loader */
-        .spinner {
-            border: 2.5px solid rgba(0,0,0,0.1);
-            width: 18px; height: 18px;
-            border-radius: 50%;
-            border-left-color: currentColor;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* Markdown rendered prose styling */
-        .prose h3 { font-size: 1.05rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.35rem; color: #1F2937; }
-        .prose p { margin-bottom: 0.65rem; color: #4B5563; font-size: 0.875rem; line-height: 1.5; }
-        .prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; color: #4B5563; font-size: 0.875rem; }
-        .prose li { margin-bottom: 0.25rem; }
-        .prose strong { color: #111827; font-weight: 600; }
-
-        .content-area { 
-            padding-bottom: calc(140px + env(safe-area-inset-bottom, 24px)) !important; 
-        }
+        /* Safe-area support for iOS home swipe bar and notch */
         .safe-bottom-nav {
-            padding-bottom: env(safe-area-inset-bottom, 10px);
+            padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+        }
+        .content-scroll {
+            padding-bottom: max(200px, calc(160px + env(safe-area-inset-bottom, 36px))) !important;
+        }
+        /* Custom scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
         }
     </style>
 </head>
-<body class="text-gray-800 antialiased h-screen flex flex-col overflow-hidden selection:bg-indigo-100">
+<body class="h-full text-slate-800 antialiased font-sans flex flex-col bg-slate-100 selection:bg-indigo-500 selection:text-white">
 
-    <header class="bg-white/95 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 shrink-0">
-        <div class="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
-            <div class="flex items-center gap-2 text-primary font-black tracking-tight text-lg">
-                <div class="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-primary shadow-sm">
-                    <i class="ph-fill ph-barbell text-xl"></i>
+    <!-- Top Sticky Header -->
+    <header class="sticky top-0 z-30 bg-slate-900 text-white px-4 py-3 border-b border-slate-800 shadow-md">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-500/50">
+                    <i class="ph-bold ph-barbell text-lg"></i>
                 </div>
-                <span>FitTrack<span class="text-xs font-bold text-accent ml-1 px-1.5 py-0.5 bg-purple-50 rounded-md border border-purple-200">AI</span></span>
+                <div>
+                    <h1 class="text-sm font-black tracking-tight leading-none text-white">FitTrack</h1>
+                    <p class="text-[10px] font-medium text-slate-400 leading-tight">Strength & Calorie Intelligence</p>
+                </div>
             </div>
-
-            <!-- Status Indicator -->
-            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Phone Storage</span>
+            <!-- Local device sync badge -->
+            <div class="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700/60">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-[10px] font-semibold text-slate-300">Local Storage Active</span>
             </div>
         </div>
     </header>
 
-    <div id="toast-banner" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 transform -translate-y-10 opacity-0 pointer-events-none max-w-xs w-full px-4">
-        <div id="toast-content" class="bg-gray-900/95 text-white text-xs font-medium px-4 py-2.5 rounded-2xl shadow-lg backdrop-blur flex items-center justify-between gap-2 border border-white/10">
-            <span id="toast-message">Notification message</span>
-            <i id="toast-icon" class="ph-bold ph-check text-emerald-400 text-sm"></i>
-        </div>
-    </div>
+    <main class="flex-1 max-w-md w-full mx-auto p-4 content-scroll overflow-y-auto">
 
-    <main class="flex-1 w-full max-w-md mx-auto overflow-y-auto content-area relative p-4 space-y-4">
-        
-        <!-- ============================================== -->
-        <!-- TAB 1: LOG WORKOUT & GARMIN CALORIES -->
-        <!-- ============================================== -->
-        <div id="content-log" class="tab-content block space-y-4">
+        <!-- ======================================================== -->
+        <!-- TAB 1: LOGGING (WORKOUT FIRST, THEN GARMIN CALORIE BURN) -->
+        <!-- ======================================================== -->
+        <section id="content-log" class="tab-content space-y-4">
             
-            <!-- Date & Garmin Calorie Burn Card (Independent) -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="ph-fill ph-flame text-sky-500 text-sm"></i> Garmin Calorie Burn
-                    </span>
-                    <span class="text-xs text-sky-700 font-semibold bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">Daily Total (Active + Resting)</span>
+            <!-- 1. WORKOUT SESSION CARD (TOP) -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3.5">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div class="flex items-center gap-2">
+                        <span class="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                            <i class="ph-bold ph-barbell text-base"></i>
+                        </span>
+                        <div>
+                            <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Workout Session</h2>
+                            <p class="text-[10px] text-slate-400 font-medium">Log resistance exercises with date</p>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Workout Date Selection -->
+                <div class="space-y-1">
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                        <i class="ph ph-calendar text-xs"></i> Session Workout Date
+                    </label>
+                    <input type="date" id="workout-date" 
+                           class="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                </div>
+
+                <!-- Standardized vs Custom Exercise Picker -->
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Exercise</label>
+                        <button type="button" id="btn-toggle-custom" onclick="toggleCustomExerciseInput()" 
+                                class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition">
+                            + New Custom Name
+                        </button>
+                    </div>
+
+                    <!-- Dropdown for standardized exercises -->
+                    <div id="select-exercise-container">
+                        <select id="input-standard-exercise" 
+                                class="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <!-- Custom input alternative -->
+                    <div id="custom-exercise-container" class="hidden">
+                        <input type="text" id="input-custom-exercise" placeholder="e.g. Bulgarian Split Squat" 
+                               class="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                    </div>
+                </div>
+
+                <!-- Weight First, Followed by Sets and Reps -->
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Weight (kg)</label>
+                        <input type="number" id="input-weight" step="0.5" min="0" placeholder="80" 
+                               class="w-full h-11 px-2.5 text-center bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sets</label>
+                        <input type="number" id="input-sets" min="1" placeholder="4" 
+                               class="w-full h-11 px-2.5 text-center bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Reps</label>
+                        <input type="number" id="input-reps" min="1" placeholder="10" 
+                               class="w-full h-11 px-2.5 text-center bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                    </div>
+                </div>
+
+                <button onclick="addExerciseToDraft()" 
+                        class="w-full h-11 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm transition active:scale-[0.98] flex items-center justify-center gap-1.5">
+                    <i class="ph-bold ph-plus-circle text-sm"></i> Add Exercise to Draft
+                </button>
+            </div>
+
+            <!-- CURRENT SESSION DRAFT ACCUMULATOR -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-bold text-slate-800">Current Session Draft</span>
+                        <span id="staged-count-badge" class="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-full">0 exercises</span>
+                    </div>
+                    <span id="staged-volume-badge" class="text-[11px] font-bold text-indigo-600">0 kg volume</span>
+                </div>
+
+                <!-- Staged items list -->
+                <div id="staged-exercises-list" class="space-y-2 max-h-56 overflow-y-auto">
+                    <!-- Populated dynamically via renderDraftList() -->
+                </div>
+
+                <button id="btn-commit-session" onclick="commitFullSession()" disabled 
+                        class="w-full h-12 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-indigo-600/20 transition active:scale-[0.98] flex items-center justify-center gap-2">
+                    <i class="ph-bold ph-floppy-disk text-base"></i> Save Workout Session
+                </button>
+            </div>
+
+            <!-- 2. GARMIN CALORIE BURN CARD (PURPLE GRADIENT STYLING) -->
+            <div class="rounded-2xl p-4 bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 text-white shadow-md border border-indigo-700/40 space-y-3.5">
+                <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+                    <div class="flex items-center gap-2">
+                        <span class="p-1.5 bg-white/10 text-purple-300 rounded-lg backdrop-blur-sm">
+                            <i class="ph-fill ph-flame text-base"></i>
+                        </span>
+                        <div>
+                            <h2 class="text-xs font-bold text-white uppercase tracking-wider">Garmin Calorie Burn</h2>
+                            <p class="text-[10px] text-purple-200/80 font-medium">Daily Total (Active + Resting)</p>
+                        </div>
+                    </div>
+                    <span id="garmin-saved-status" class="text-[10px] font-semibold text-purple-200">
+                        Check Date
+                    </span>
+                </div>
+
+                <!-- Side-by-side aligned height inputs -->
                 <div class="grid grid-cols-2 gap-3">
                     <div class="flex flex-col">
-                        <label class="h-5 flex items-center text-[11px] font-bold text-gray-400 uppercase mb-1.5">Date</label>
-                        <input type="date" id="garmin-date" onchange="onGarminDateChange()" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-garmin outline-none transition-all">
+                        <div class="h-5 flex items-center">
+                            <label class="text-[10px] font-bold uppercase tracking-wider text-purple-200">Date</label>
+                        </div>
+                        <input type="date" id="garmin-date" onchange="onGarminDateChange()" 
+                               class="w-full h-11 px-3 bg-white/10 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-purple-400 transition">
                     </div>
                     <div class="flex flex-col">
-                        <label class="h-5 flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase mb-1.5">
-                            <span class="truncate">Total Daily Burn</span>
-                            <span class="text-[10px] text-sky-600 font-semibold lowercase shrink-0 ml-1">kcal</span>
-                        </label>
-                        <div class="relative w-full">
-                            <input type="number" id="garmin-calories" min="0" placeholder="e.g. 2450" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 pl-8 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-garmin outline-none transition-all">
-                            <i class="ph-fill ph-flame text-sky-500 absolute left-2.5 top-1/2 -translate-y-1/2 text-base pointer-events-none"></i>
+                        <div class="h-5 flex items-center justify-between">
+                            <label class="text-[10px] font-bold uppercase tracking-wider text-purple-200">Total Burn</label>
+                            <span class="text-[10px] font-semibold text-purple-300">kcal</span>
+                        </div>
+                        <div class="relative">
+                            <input type="number" id="garmin-calories" min="0" placeholder="e.g. 2450" 
+                                   class="w-full h-11 pl-8 pr-3 bg-white/10 border border-white/20 rounded-xl text-xs font-bold text-white placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-purple-400 transition">
+                            <i class="ph-fill ph-flame absolute left-2.5 top-1/2 -translate-y-1/2 text-purple-300 text-xs pointer-events-none"></i>
                         </div>
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between pt-1">
-                    <span id="garmin-saved-status" class="text-[11px] text-gray-400 font-medium">No calories saved for this date</span>
-                    <button type="button" onclick="saveGarminCalories()" class="bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-bold py-2 px-3.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-sm">
-                        <i class="ph-bold ph-check"></i> Save Daily Burn
-                    </button>
-                </div>
-            </div>
-
-            <!-- AI Quick Natural Language Workout Logger -->
-            <div class="bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 rounded-2xl p-4 text-white shadow-md space-y-2.5">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-1.5 text-xs font-bold tracking-wide uppercase">
-                        <i class="ph-fill ph-sparkle text-amber-300 text-sm"></i>
-                        <span>AI Smart Log (Voice or Text)</span>
-                    </div>
-                    <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-medium">Gemini 3 Flash</span>
-                </div>
-                <p class="text-xs text-indigo-100 leading-relaxed">
-                    Dictate or paste your workout session. Gemini will extract exercises, sets, weights, and Garmin calories into your draft.
-                </p>
-                <div class="flex gap-2">
-                    <input type="text" id="ai-quicklog-input" placeholder="e.g., 3 sets bench press 80kg 10 reps, 3 sets pullups 12 reps, 600 garmin kcal" class="flex-1 rounded-xl bg-white/95 text-gray-800 placeholder-gray-400 px-3 py-2.5 text-xs font-medium outline-none focus:ring-2 focus:ring-white">
-                    <button type="button" onclick="parseNaturalLanguageWorkout()" id="btn-parse-ai" class="bg-white text-indigo-600 hover:bg-indigo-50 font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-1 shrink-0 transition-all active:scale-95 shadow-sm">
-                        <i class="ph-bold ph-magic-wand"></i>
-                        <span>Parse</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Add Individual Exercise Form (With Dedicated Workout Date) -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3.5">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                        <i class="ph-bold ph-barbell text-primary text-base"></i> Workout Session
-                    </h3>
-                    <button type="button" onclick="toggleCustomExerciseInput()" id="btn-toggle-custom" class="text-[11px] font-semibold text-primary hover:underline">
-                        + New Custom Name
-                    </button>
-                </div>
-
-                <!-- Workout Date Picker -->
-                <div>
-                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1.5">Workout Date</label>
-                    <input type="date" id="workout-date" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-primary outline-none transition-all">
-                </div>
-
-                <!-- Standardized Select or Custom Text -->
-                <div id="select-exercise-container">
-                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1">Standardized Exercise</label>
-                    <select id="input-standard-exercise" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-primary outline-none">
-                        <!-- Populated dynamically via JS -->
-                    </select>
-                </div>
-
-                <div id="custom-exercise-container" class="hidden">
-                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 flex items-center justify-between">
-                        <span>New Exercise Name</span>
-                        <span class="text-[10px] text-gray-400">Saves to your library</span>
-                    </label>
-                    <input type="text" id="input-custom-exercise" placeholder="e.g. Incline Dumbbell Hammer Curl" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-primary outline-none">
-                </div>
-
-                <!-- Weight, Sets, Reps Inputs (Weight First) -->
-                <div class="grid grid-cols-3 gap-2.5">
-                    <div>
-                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 text-center">Weight (kg)</label>
-                        <input type="number" id="input-weight" min="0" step="0.5" placeholder="60" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-center text-sm font-bold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 text-center">Sets</label>
-                        <input type="number" id="input-sets" min="1" max="99" placeholder="3" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-center text-sm font-bold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 text-center">Reps</label>
-                        <input type="number" id="input-reps" min="1" max="999" placeholder="10" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-center text-sm font-bold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
-                    </div>
-                </div>
-
-                <button type="button" onclick="addExerciseToDraft()" class="w-full bg-gray-900 hover:bg-black active:bg-gray-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm">
-                    <i class="ph-bold ph-plus"></i> Add to Session List
+                <button onclick="saveGarminCalories()" 
+                        class="w-full h-11 bg-white text-purple-950 hover:bg-purple-50 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition active:scale-[0.98] flex items-center justify-center gap-1.5">
+                    <i class="ph-bold ph-check text-sm"></i> Save Daily Burn
                 </button>
             </div>
 
-            <!-- Today's Staged Workout Session List -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                        <span>Current Session Draft</span>
-                        <span id="staged-count-badge" class="ml-1 bg-gray-100 text-gray-700 text-[10px] px-2 py-0.5 rounded-full font-bold">0 exercises</span>
-                    </h3>
-                    <span id="staged-volume-badge" class="text-xs font-bold text-primary">0 kg volume</span>
-                </div>
+            <!-- Bottom spacing buffer after Garmin calorie burn card -->
+            <div class="h-[50px] pointer-events-none"></div>
+        </section>
 
-                <div id="staged-exercises-list" class="space-y-2">
-                    <div class="text-center py-6 text-gray-400 text-xs border border-dashed border-gray-200 rounded-xl">
-                        <i class="ph ph-barbell text-2xl mb-1 opacity-60"></i>
-                        <p>No exercises staged for this session yet.</p>
-                        <p class="text-[10px] text-gray-400 mt-0.5">Use the form above or the AI parser to add items.</p>
-                    </div>
-                </div>
-
-                <!-- Commit session button -->
-                <button type="button" onclick="commitFullSession()" id="btn-commit-session" disabled class="w-full bg-primary hover:bg-primaryDark disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-100 disabled:shadow-none">
-                    <i class="ph-bold ph-floppy-disk"></i> Save Workout Session
-                </button>
-            </div>
-
-            <!-- Extra scroll margin to keep Save button comfortably above iOS tab bar -->
-            <div class="h-12 w-full"></div>
-        </div>
-
-        <!-- ============================================== -->
-        <!-- TAB 2: WORKOUT & CALORIE HISTORY -->
-        <!-- ============================================== -->
-        <div id="content-history" class="tab-content hidden space-y-4">
-            <div class="flex justify-between items-center px-1">
+        <!-- ======================================================== -->
+        <!-- TAB 2: HISTORY VIEW                                      -->
+        <!-- ======================================================== -->
+        <section id="content-history" class="tab-content hidden space-y-3">
+            <div class="flex items-center justify-between px-1">
                 <div>
-                    <h2 class="text-xl font-black text-gray-900">Workout History</h2>
-                    <p class="text-xs text-gray-500">Grouped daily workouts with Garmin daily burn (active + resting)</p>
+                    <h2 class="text-sm font-bold text-slate-900">Workout & Calorie Records</h2>
+                    <p class="text-[10px] text-slate-500 font-medium">Logged by chronological calendar days</p>
                 </div>
-                <span class="text-xs font-bold text-primary bg-indigo-50 px-2.5 py-1 rounded-full" id="history-total-sessions">0 sessions</span>
+                <span id="history-total-sessions" class="px-2.5 py-1 text-[10px] font-bold bg-slate-200 text-slate-700 rounded-full">0 entries</span>
             </div>
 
-            <div id="history-grouped-container" class="space-y-3 pb-6">
-                <!-- Injected via JavaScript -->
+            <div id="history-grouped-container" class="space-y-3">
+                <!-- Populated dynamically via renderHistoryTab() -->
             </div>
-        </div>
+            
+            <div class="h-8"></div>
+        </section>
 
-        <!-- ============================================== -->
-        <!-- TAB 3: PROGRESS & CALORIE CHARTS -->
-        <!-- ============================================== -->
-        <div id="content-progress" class="tab-content hidden space-y-4">
-            <div class="px-1">
-                <h2 class="text-xl font-black text-gray-900">Analytics & Trends</h2>
-                <p class="text-xs text-gray-500">Track volume progression alongside Garmin expenditure</p>
-            </div>
-
-            <!-- Metric Filter -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-                <div>
-                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1.5">Focus Exercise</label>
-                    <select id="chart-exercise-filter" onchange="renderCharts()" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
-                        <option value="ALL">Total Overall Volume (All Exercises)</option>
-                    </select>
-                </div>
-
-                <!-- Lift Volume Chart -->
-                <div>
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                            <span class="w-2.5 h-2.5 rounded-sm bg-primary"></span> Lifting Volume (kg)
-                        </span>
-                        <span id="chart-volume-summary" class="text-[11px] font-semibold text-gray-400">--</span>
-                    </div>
-                    <div class="w-full h-52 relative">
-                        <canvas id="volumeChart"></canvas>
-                        <div id="volume-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white/95 rounded-xl hidden">
-                            <i class="ph ph-chart-line text-3xl mb-1 opacity-50"></i>
-                            <p class="text-xs font-medium">Log sessions to view volume progression</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Garmin Calorie Expenditure Chart -->
-                <div class="pt-3 border-t border-gray-100">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                            <span class="w-2.5 h-2.5 rounded-sm bg-sky-500"></span> Garmin Calorie Burn (Active + Resting)
-                        </span>
-                        <span id="chart-calories-summary" class="text-[11px] font-semibold text-gray-400">--</span>
-                    </div>
-                    <div class="w-full h-40 relative">
-                        <canvas id="garminCalorieChart"></canvas>
-                        <div id="calories-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white/95 rounded-xl hidden">
-                            <i class="ph ph-flame text-3xl mb-1 opacity-50"></i>
-                            <p class="text-xs font-medium">Add Garmin daily calories to view trends</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ============================================== -->
-        <!-- TAB 4: GEMINI AI COACH STUDIO -->
-        <!-- ============================================== -->
-        <div id="content-coach" class="tab-content hidden space-y-4">
-            <div class="px-1">
-                <h2 class="text-xl font-black text-gray-900">Gemini AI Coach</h2>
-                <p class="text-xs text-gray-500">Intelligent wellness insights powered by Gemini 3 Flash</p>
-            </div>
-
-            <!-- AI Mode Selector Cards -->
-            <div class="grid grid-cols-1 gap-2.5">
-                <!-- Tool 1: Next Workout Plan -->
-                <div onclick="requestAIFeature('next_workout')" class="bg-gradient-to-r from-indigo-500 to-indigo-700 text-white rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all relative overflow-hidden group">
-                    <div class="relative z-10 flex items-start justify-between">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-1.5 font-bold text-sm">
-                                <i class="ph-fill ph-barbell text-amber-300 text-base"></i>
-                                <span>Generate Next Session Plan</span>
-                            </div>
-                            <p class="text-xs text-indigo-100 max-w-[260px] leading-relaxed">
-                                Builds today's ideal split, set/rep ranges, and progressive overload targets from your past logs.
-                            </p>
-                        </div>
-                        <span class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:translate-x-0.5 transition-transform">
-                            <i class="ph-bold ph-arrow-right"></i>
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Tool 2: Energy & Calorie Recovery Analysis -->
-                <div onclick="requestAIFeature('garmin_recovery')" class="bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all relative overflow-hidden group">
-                    <div class="relative z-10 flex items-start justify-between">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-1.5 font-bold text-sm">
-                                <i class="ph-fill ph-heartbeat text-rose-300 text-base"></i>
-                                <span>Garmin Energy & Recovery Coach</span>
-                            </div>
-                            <p class="text-xs text-sky-100 max-w-[260px] leading-relaxed">
-                                Evaluates volume vs Garmin calorie expenditure to flag overtraining and advise protein & carb timing.
-                            </p>
-                        </div>
-                        <span class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:translate-x-0.5 transition-transform">
-                            <i class="ph-bold ph-arrow-right"></i>
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Tool 3: Exercise Substitution & Form Advice -->
-                <div onclick="requestAIFeature('exercise_sub')" class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all relative overflow-hidden group">
-                    <div class="relative z-10 flex items-start justify-between">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-1.5 font-bold text-sm">
-                                <i class="ph-fill ph-repeat text-emerald-300 text-base"></i>
-                                <span>Smart Substitution & Form Cues</span>
-                            </div>
-                            <p class="text-xs text-purple-100 max-w-[260px] leading-relaxed">
-                                Need joint-friendly swaps or cues for lagging lifts? Ask Gemini for targeted biomechanical advice.
-                            </p>
-                        </div>
-                        <span class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:translate-x-0.5 transition-transform">
-                            <i class="ph-bold ph-arrow-right"></i>
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Dynamic Input Box for custom prompt customization -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2">
-                <label class="block text-[11px] font-bold text-gray-400 uppercase">Optional Specific Question / Focus for Coach</label>
-                <input type="text" id="ai-custom-prompt" placeholder="e.g. Focus on chest & triceps, or my lower back is feeling stiff today" class="w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-primary">
-            </div>
-
-            <!-- AI Output Card -->
-            <div id="ai-response-box" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3 min-h-[160px] relative">
-                <div class="flex items-center justify-between border-b border-gray-100 pb-2.5">
+        <!-- ======================================================== -->
+        <!-- TAB 3: PROGRESS & MUSCLE DEFICIENCY ANALYTICS            -->
+        <!-- ======================================================== -->
+        <section id="content-progress" class="tab-content hidden space-y-4">
+            
+            <!-- MUSCLE GROUP DEFICIENCY & SUMMARY MODULE -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
                     <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-indigo-50 text-primary flex items-center justify-center">
-                            <i class="ph-fill ph-robot text-lg"></i>
+                        <span class="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+                            <i class="ph-bold ph-heartbeat text-base"></i>
+                        </span>
+                        <div>
+                            <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Muscle Distribution & Deficiency</h2>
+                            <p class="text-[10px] text-slate-400 font-medium">Past 30-Day Volume & Balance Audit</p>
                         </div>
-                        <h4 id="ai-response-title" class="text-sm font-bold text-gray-800">Coach Gemini Ready</h4>
                     </div>
-                    <button onclick="copyAIResponse()" id="btn-copy-ai" class="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1 font-semibold">
+                </div>
+
+                <!-- Deficiency alerts -->
+                <div id="deficiency-alert-container" class="space-y-2">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- Muscle group set bars -->
+                <div id="muscle-group-bars" class="space-y-2.5 pt-1">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Exercise Filter for Volume Chart -->
+            <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80 space-y-2">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Filter Lift Volume by Exercise</label>
+                <select id="chart-exercise-filter" onchange="renderCharts()" 
+                        class="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="ALL">Total Overall Volume (All Exercises)</option>
+                </select>
+            </div>
+
+            <!-- Volume Trend Chart -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Lifting Volume Trend</h3>
+                        <p class="text-[10px] text-slate-400 font-medium">Sets &times; Reps &times; Weight (kg)</p>
+                    </div>
+                    <span id="chart-volume-summary" class="text-xs font-black text-indigo-600">0 kg</span>
+                </div>
+                <div class="h-48 relative">
+                    <canvas id="volumeChart"></canvas>
+                    <div id="volume-empty-state" class="absolute inset-0 flex items-center justify-center text-xs text-slate-400 bg-white/90">
+                        No workout logs found
+                    </div>
+                </div>
+            </div>
+
+            <!-- Garmin Daily Calorie Burn Chart -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Garmin Daily Calorie Burn</h3>
+                        <p class="text-[10px] text-slate-400 font-medium">Total Daily Expenditure (Active + Resting)</p>
+                    </div>
+                    <span id="chart-calories-summary" class="text-xs font-black text-sky-600">0 kcal</span>
+                </div>
+                <div class="h-48 relative">
+                    <canvas id="garminCalorieChart"></canvas>
+                    <div id="calories-empty-state" class="absolute inset-0 flex items-center justify-center text-xs text-slate-400 bg-white/90">
+                        No Garmin calorie records saved
+                    </div>
+                </div>
+            </div>
+
+            <div class="h-8"></div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 4: GEMINI AI COACH STUDIO                            -->
+        <!-- ======================================================== -->
+        <section id="content-coach" class="tab-content hidden space-y-4">
+            
+            <div class="bg-gradient-to-r from-indigo-900 to-slate-900 text-white p-4 rounded-2xl shadow-md border border-indigo-700/50">
+                <div class="flex items-center gap-2 mb-1">
+                    <i class="ph-fill ph-sparkle text-indigo-400 text-lg"></i>
+                    <h2 class="text-sm font-black tracking-wide text-white">AI Coach Intelligence</h2>
+                </div>
+                <p class="text-[11px] text-indigo-200/90 leading-relaxed">
+                    Personalized insights powered by Gemini, evaluating your training volume, Garmin calorie expenditure, and muscular balance.
+                </p>
+            </div>
+
+            <!-- Action Trigger Cards -->
+            <div class="grid grid-cols-2 gap-2.5">
+                <button onclick="requestAIFeature('muscle_deficiency')" 
+                        class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-left shadow-sm transition active:scale-[0.98]">
+                    <i class="ph-bold ph-heartbeat text-rose-500 text-lg mb-1.5 block"></i>
+                    <p class="text-xs font-bold text-slate-800">Muscle Audit</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Detect lagging groups & push/pull ratio</p>
+                </button>
+
+                <button onclick="requestAIFeature('next_workout')" 
+                        class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-left shadow-sm transition active:scale-[0.98]">
+                    <i class="ph-bold ph-calendar-plus text-indigo-600 text-lg mb-1.5 block"></i>
+                    <p class="text-xs font-bold text-slate-800">Next Workout</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Optimal routine & progressive overload</p>
+                </button>
+
+                <button onclick="requestAIFeature('garmin_recovery')" 
+                        class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-left shadow-sm transition active:scale-[0.98]">
+                    <i class="ph-bold ph-flame text-sky-500 text-lg mb-1.5 block"></i>
+                    <p class="text-xs font-bold text-slate-800">Garmin Energy</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Deficit risk & recovery nutrition</p>
+                </button>
+
+                <button onclick="requestAIFeature('exercise_sub')" 
+                        class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-left shadow-sm transition active:scale-[0.98]">
+                    <i class="ph-bold ph-arrows-left-right text-emerald-600 text-lg mb-1.5 block"></i>
+                    <p class="text-xs font-bold text-slate-800">Smart Substitutes</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Joint-friendly biomechanics cues</p>
+                </button>
+            </div>
+
+            <!-- Optional Custom Query -->
+            <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-1.5">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Add Specific Context or Target (Optional)</label>
+                <input type="text" id="ai-custom-prompt" placeholder="e.g. Focus on chest hypertrophy, recovering from knee soreness" 
+                       class="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <!-- AI Response Box -->
+            <div id="ai-response-box" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 min-h-[160px] space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span id="ai-response-title" class="text-xs font-bold text-slate-800">Coach Recommendation</span>
+                    <button onclick="copyAIResponse()" class="text-slate-400 hover:text-indigo-600 text-xs font-semibold flex items-center gap-1">
                         <i class="ph ph-copy"></i> Copy
                     </button>
                 </div>
 
-                <!-- Loading State -->
-                <div id="ai-loading-state" class="hidden py-10 flex-col items-center justify-center gap-2.5">
-                    <div class="spinner text-primary"></div>
-                    <p class="text-xs font-semibold text-gray-500 animate-pulse">Consulting Gemini 3 Flash...</p>
+                <div id="ai-idle-state" class="py-8 text-center text-slate-400 text-xs">
+                    <i class="ph ph-sparkle text-2xl text-slate-300 mb-1"></i>
+                    <p>Select any analysis prompt above to generate coaching recommendations.</p>
                 </div>
 
-                <!-- Idle State -->
-                <div id="ai-idle-state" class="text-center py-8 text-gray-400 space-y-1">
-                    <i class="ph ph-sparkle text-3xl opacity-40"></i>
-                    <p class="text-xs font-medium">Tap any of the 3 coach cards above to get instant personalized feedback.</p>
+                <div id="ai-loading-state" class="hidden py-8 flex flex-col items-center justify-center gap-2 text-indigo-600">
+                    <i class="ph-bold ph-spinner animate-spin text-2xl"></i>
+                    <span class="text-xs font-semibold">Gemini is analyzing your workouts...</span>
                 </div>
 
-                <!-- Result Markdown Container -->
-                <div id="ai-result-content" class="prose hidden">
-                    <!-- Markdown rendered here -->
-                </div>
-            </div>
-        </div>
-
-        <!-- ============================================== -->
-        <!-- TAB 5: SETTINGS & DATA TOOLS -->
-        <!-- ============================================== -->
-        <div id="content-settings" class="tab-content hidden space-y-4">
-            <div class="px-1">
-                <h2 class="text-xl font-black text-gray-900">Settings</h2>
-                <p class="text-xs text-gray-500">Configure Gemini API key and manage stored device data</p>
+                <div id="ai-result-content" class="hidden prose prose-sm text-xs text-slate-700 max-w-none leading-relaxed"></div>
             </div>
 
-            <!-- Gemini Key Card -->
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
-                        <i class="ph-fill ph-key text-xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-800">Gemini API Key</h3>
-                        <p class="text-xs text-gray-500">Optional: override key for your custom deployment</p>
-                    </div>
-                </div>
+            <div class="h-8"></div>
+        </section>
 
-                <p class="text-xs text-gray-500 leading-relaxed">
-                    When running in this collaborative environment, the API key is handled automatically. When hosting yourself on GitHub Pages, paste your Google AI Studio API key below.
+        <!-- ======================================================== -->
+        <!-- TAB 5: SETTINGS & EXERCISE LIBRARY                       -->
+        <!-- ======================================================== -->
+        <section id="content-settings" class="tab-content hidden space-y-4">
+            <!-- Gemini API Key configuration -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+                <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <i class="ph-bold ph-key text-indigo-600 text-base"></i>
+                    <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Gemini API Key</h3>
+                </div>
+                <p class="text-[11px] text-slate-500">
+                    Your key is stored securely in your phone's local storage and used directly for workout recommendations.
                 </p>
-
-                <div class="space-y-2">
-                    <input type="password" id="input-gemini-key" placeholder="AIzaSy..." class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-xs font-mono text-gray-800 outline-none focus:ring-2 focus:ring-primary">
-                    <button onclick="saveUserApiKey()" class="w-full bg-gray-900 hover:bg-black active:bg-gray-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5">
-                        <i class="ph-bold ph-check"></i> Save Key
+                <div class="space-y-1.5">
+                    <input type="password" id="input-gemini-key" placeholder="AIzaSy..." 
+                           class="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button onclick="saveUserApiKey()" 
+                            class="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition">
+                        Save API Key
                     </button>
                 </div>
             </div>
 
-            <!-- Standardized Exercises Management -->
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
-                        <i class="ph-fill ph-book-bookmark text-primary"></i> Master Exercise Library
-                    </h3>
-                    <span id="exercise-count-label" class="text-xs font-bold text-gray-400">0 loaded</span>
+            <!-- Standardized Exercise Library Tags -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i class="ph-bold ph-books text-indigo-600 text-base"></i>
+                        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Standard Exercise Library</h3>
+                    </div>
+                    <span id="exercise-count-label" class="text-[10px] font-bold text-slate-500">0 exercises</span>
                 </div>
-                <p class="text-xs text-gray-500">All standard exercises saved to your phone's catalog:</p>
-                <div id="exercise-tag-cloud" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-gray-50 rounded-xl border border-gray-100">
-                    <!-- Badges -->
+                <div id="exercise-tag-cloud" class="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
+                    <!-- Populated dynamically via renderSettingsLibrary() -->
                 </div>
             </div>
 
-            <!-- Data Management & Danger Zone -->
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-red-100 space-y-3">
-                <h3 class="text-sm font-bold text-red-600 flex items-center gap-2">
-                    <i class="ph-fill ph-trash"></i> Data Management
-                </h3>
-                <p class="text-xs text-gray-500">Download a backup JSON of your workouts or reset your device data.</p>
+            <!-- Data Export and Reset -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5">
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Backup & Storage</h3>
                 <div class="grid grid-cols-2 gap-2">
-                    <button onclick="exportWorkoutDataJSON()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1">
-                        <i class="ph-bold ph-download-simple"></i> Backup JSON
+                    <button onclick="exportWorkoutDataJSON()" 
+                            class="h-10 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                        <i class="ph-bold ph-download-simple"></i> Export Backup
                     </button>
-                    <button onclick="clearAllDeviceData()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1">
-                        <i class="ph-bold ph-warning"></i> Wipe All Logs
+                    <button onclick="clearAllDeviceData()" 
+                            class="h-10 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                        <i class="ph-bold ph-trash"></i> Reset Data
                     </button>
                 </div>
             </div>
-        </div>
+
+            <div class="h-8"></div>
+        </section>
 
     </main>
 
-    <!-- iOS Native-Styled Bottom Tab Bar -->
-    <nav class="bg-white/95 backdrop-blur-md border-t border-gray-200/80 fixed bottom-0 w-full z-40 safe-bottom-nav">
-        <div class="max-w-md mx-auto flex justify-around items-center h-16 px-1">
-            
-            <button onclick="switchTab('log')" id="tab-log" class="tab-active flex flex-col items-center justify-center w-16 gap-1 transition-colors">
-                <i class="ph-fill ph-plus-circle text-2xl"></i>
-                <span class="text-[10px] font-bold">Log</span>
+    <!-- Fixed Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg safe-bottom-nav">
+        <div class="max-w-md mx-auto grid grid-cols-5 px-1 py-1.5">
+            <button id="tab-log" onclick="switchTab('log')" class="tab-btn flex flex-col items-center justify-center py-1 text-indigo-600">
+                <i class="ph-fill ph-plus-circle text-xl"></i>
+                <span class="text-[10px] font-bold mt-0.5">Log</span>
             </button>
-
-            <button onclick="switchTab('history')" id="tab-history" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
-                <i class="ph ph-clock-counter-clockwise text-2xl"></i>
-                <span class="text-[10px] font-bold">History</span>
+            <button id="tab-history" onclick="switchTab('history')" class="tab-btn flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-600">
+                <i class="ph ph-clock-counter-clockwise text-xl"></i>
+                <span class="text-[10px] font-medium mt-0.5">History</span>
             </button>
-
-            <button onclick="switchTab('progress')" id="tab-progress" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
-                <i class="ph ph-chart-line text-2xl"></i>
-                <span class="text-[10px] font-bold">Progress</span>
+            <button id="tab-progress" onclick="switchTab('progress')" class="tab-btn flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-600">
+                <i class="ph ph-chart-line-up text-xl"></i>
+                <span class="text-[10px] font-medium mt-0.5">Analytics</span>
             </button>
-
-            <button onclick="switchTab('coach')" id="tab-coach" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
-                <i class="ph ph-sparkle text-2xl"></i>
-                <span class="text-[10px] font-bold">AI Coach</span>
+            <button id="tab-coach" onclick="switchTab('coach')" class="tab-btn flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-600">
+                <i class="ph ph-sparkle text-xl"></i>
+                <span class="text-[10px] font-medium mt-0.5">AI Coach</span>
             </button>
-
-            <button onclick="switchTab('settings')" id="tab-settings" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
-                <i class="ph ph-gear text-2xl"></i>
-                <span class="text-[10px] font-bold">Settings</span>
+            <button id="tab-settings" onclick="switchTab('settings')" class="tab-btn flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-600">
+                <i class="ph ph-gear text-xl"></i>
+                <span class="text-[10px] font-medium mt-0.5">Settings</span>
             </button>
-
         </div>
-        <div class="h-safe w-full bg-white"></div>
     </nav>
 
+    <!-- Global Toast Notification Banner -->
+    <div id="toast-banner" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 transform -translate-y-12 opacity-0 pointer-events-none">
+        <div class="bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 border border-slate-700 text-xs font-semibold">
+            <i id="toast-icon" class="ph-bold ph-check-circle text-emerald-400 text-base"></i>
+            <span id="toast-message">Notification message</span>
+        </div>
+    </div>
+
     <script>
+        /* FitTrack Core Application Logic */
         const DEFAULT_EXERCISES = [
             "Barbell Bench Press",
             "Incline Dumbbell Press",
-            "Barbell Back Squat",
-            "Front Squat",
-            "Deadlift (Conventional)",
-            "Romanian Deadlift",
-            "Overhead Shoulder Press",
+            "Overhead Barbell Press",
             "Dumbbell Lateral Raise",
-            "Pull-Up / Chin-Up",
+            "Barbell Squat",
+            "Leg Press",
+            "Romanian Deadlift",
+            "Barbell Deadlift",
             "Lat Pulldown",
             "Barbell Bent-Over Row",
-            "Cable Seated Row",
-            "Leg Press",
-            "Leg Curl (Hamstrings)",
-            "Leg Extension (Quads)",
-            "Calf Raise",
+            "Seated Cable Row",
             "Dumbbell Bicep Curl",
             "Tricep Rope Pushdown",
-            "Dips",
-            "Plank / Core Hold"
+            "Plank",
+            "Hanging Leg Raise"
         ];
 
-        // Core App State
+        // Muscle Group Taxonomy for Volume Analysis
+        const MUSCLE_GROUPS = {
+            "Chest": { color: "#4F46E5", keywords: ["bench", "chest", "fly", "pushup", "dip"] },
+            "Back": { color: "#06B6D4", keywords: ["lat", "pull", "row", "chin", "deadlift"] },
+            "Quads & Glutes": { color: "#10B981", keywords: ["squat", "leg press", "lunge", "extension", "glute"] },
+            "Hamstrings & Calves": { color: "#F59E0B", keywords: ["romanian", "rdl", "curl", "calf", "hamstring"] },
+            "Shoulders": { color: "#8B5CF6", keywords: ["overhead", "press", "lateral", "delt", "raise"] },
+            "Arms": { color: "#EC4899", keywords: ["bicep", "tricep", "curl", "pushdown", "skull", "hammer"] },
+            "Core": { color: "#64748B", keywords: ["plank", "ab", "crunch", "hanging", "twist", "core"] }
+        };
+
+        // Reactive Application State
+        let sessionLogs = [];
         let exerciseLibrary = [];
-        let sessionLogs = []; // Array of { id, date, garminCalories, exercises: [{ name, sets, reps, weight }], timestamp }
-        let currentDraftExercises = []; // Exercises currently staged for the active date
+        let currentDraftExercises = [];
+        let isCustomExerciseMode = false;
         let volumeChartInstance = null;
         let caloriesChartInstance = null;
-        let isCustomExerciseMode = false;
+
+        function getExerciseMuscleGroup(name) {
+            const lower = (name || "").toLowerCase();
+            for (const [group, conf] of Object.entries(MUSCLE_GROUPS)) {
+                if (conf.keywords.some(k => lower.includes(k))) {
+                    return group;
+                }
+            }
+            return "Chest"; // Default fallback
+        }
 
         window.onload = function() {
             initApp();
         };
 
         function initApp() {
-            // Default date inputs to today in local timezone
+            // Default dates to today in local timezone
             const todayStr = new Date().toISOString().split('T')[0];
-            document.getElementById('garmin-date').value = todayStr;
             document.getElementById('workout-date').value = todayStr;
+            document.getElementById('garmin-date').value = todayStr;
 
-            // Load stored exercise library
-            const savedExercises = localStorage.getItem('fittrack_exercise_library');
-            if (savedExercises) {
+            // Load Exercise Library
+            const savedLib = localStorage.getItem('fittrack_exercise_library');
+            if (savedLib) {
                 try {
-                    exerciseLibrary = JSON.parse(savedExercises);
+                    exerciseLibrary = JSON.parse(savedLib);
                 } catch(e) {
                     exerciseLibrary = [...DEFAULT_EXERCISES];
                 }
@@ -583,7 +574,7 @@
                 saveExerciseLibrary();
             }
 
-            // Load session logs
+            // Load Sessions
             const savedSessions = localStorage.getItem('fittrack_sessions');
             if (savedSessions) {
                 try {
@@ -592,31 +583,23 @@
                     sessionLogs = [];
                 }
             } else {
-                // Migration support: check if old format was used
-                const legacyWorkouts = localStorage.getItem('fittrack_workouts');
-                if (legacyWorkouts) {
-                    try {
-                        const parsedLegacy = JSON.parse(legacyWorkouts);
-                        migrateLegacyData(parsedLegacy);
-                    } catch(e) {
-                        sessionLogs = [];
-                    }
-                }
+                sessionLogs = [];
             }
 
-            // Load user API key if configured
+            // Load saved API key if present
             const savedKey = localStorage.getItem('fittrack_gemini_key');
             if (savedKey) {
                 document.getElementById('input-gemini-key').value = savedKey;
             }
 
-            // Populate UI components and check existing calories for selected date
+            // Refresh UI Views
             onGarminDateChange();
             refreshExerciseDropdown();
             renderDraftList();
             renderHistoryTab();
             renderSettingsLibrary();
             populateChartExerciseFilter();
+            renderMuscleAnalysis();
         }
 
         function onGarminDateChange() {
@@ -625,17 +608,17 @@
             const calInput = document.getElementById('garmin-calories');
 
             if (!dateVal) {
-                statusLabel.textContent = 'Please select a date';
+                statusLabel.textContent = 'Pick a date';
                 return;
             }
 
             const existingEntry = sessionLogs.find(s => s.date === dateVal);
             if (existingEntry && existingEntry.garminCalories > 0) {
                 calInput.value = existingEntry.garminCalories;
-                statusLabel.innerHTML = `<span class="text-emerald-600 font-semibold"><i class="ph ph-check-circle"></i> Logged: ${existingEntry.garminCalories.toLocaleString()} kcal</span>`;
+                statusLabel.innerHTML = `<span class="text-emerald-300 font-bold"><i class="ph-bold ph-check"></i> ${existingEntry.garminCalories.toLocaleString()} kcal</span>`;
             } else {
                 calInput.value = '';
-                statusLabel.textContent = 'No calories saved for this date';
+                statusLabel.textContent = 'No burn saved yet';
             }
         }
 
@@ -647,7 +630,6 @@
                 showToast('Please choose a date for Garmin calories', 'error');
                 return;
             }
-
             if (isNaN(calVal) || calVal < 0) {
                 showToast('Please enter a valid calorie burn number', 'error');
                 return;
@@ -671,35 +653,12 @@
             showToast(`Saved ${calVal.toLocaleString()} kcal for ${dateVal}`, 'success');
         }
 
-        function migrateLegacyData(legacyItems) {
-            const grouped = {};
-            legacyItems.forEach(item => {
-                if (!grouped[item.date]) {
-                    grouped[item.date] = {
-                        id: 'sess_' + item.date.replace(/-/g, '') + '_' + Math.random().toString(36).substr(2, 5),
-                        date: item.date,
-                        garminCalories: 0,
-                        timestamp: item.timestamp || Date.now(),
-                        exercises: []
-                    };
-                }
-                grouped[item.date].exercises.push({
-                    name: item.exercise,
-                    sets: item.sets,
-                    reps: item.reps,
-                    weight: item.weight
-                });
-            });
-            sessionLogs = Object.values(grouped);
-            saveSessionLogs();
-        }
-
         function saveSessionLogs() {
-            // Sort by date descending
             sessionLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
             localStorage.setItem('fittrack_sessions', JSON.stringify(sessionLogs));
             renderHistoryTab();
             populateChartExerciseFilter();
+            renderMuscleAnalysis();
             if (!document.getElementById('content-progress').classList.contains('hidden')) {
                 renderCharts();
             }
@@ -738,7 +697,7 @@
             if (isCustomExerciseMode) {
                 selectContainer.classList.add('hidden');
                 customContainer.classList.remove('hidden');
-                toggleBtn.textContent = '← Pick from Standard List';
+                toggleBtn.textContent = '← Standard List';
                 document.getElementById('input-custom-exercise').focus();
             } else {
                 selectContainer.classList.remove('hidden');
@@ -755,7 +714,6 @@
                     showToast('Please enter an exercise name', 'error');
                     return;
                 }
-                // Save to standardized library if not already present
                 if (!exerciseLibrary.some(e => e.toLowerCase() === exerciseName.toLowerCase())) {
                     exerciseLibrary.push(exerciseName);
                     saveExerciseLibrary();
@@ -764,42 +722,42 @@
                 exerciseName = document.getElementById('input-standard-exercise').value;
             }
 
+            const weight = parseFloat(document.getElementById('input-weight').value);
             const sets = parseInt(document.getElementById('input-sets').value);
             const reps = parseInt(document.getElementById('input-reps').value);
-            const weight = parseFloat(document.getElementById('input-weight').value);
 
+            if (isNaN(weight) || weight < 0) {
+                showToast('Please enter a valid weight (kg)', 'error');
+                return;
+            }
             if (isNaN(sets) || sets <= 0) {
-                showToast('Please enter valid number of sets', 'error');
+                showToast('Please enter valid sets', 'error');
                 return;
             }
             if (isNaN(reps) || reps <= 0) {
                 showToast('Please enter valid reps', 'error');
                 return;
             }
-            if (isNaN(weight) || weight < 0) {
-                showToast('Please enter valid weight (kg)', 'error');
-                return;
-            }
 
             currentDraftExercises.push({
                 id: 'draft_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
                 name: exerciseName,
+                weight: weight,
                 sets: sets,
-                reps: reps,
-                weight: weight
+                reps: reps
             });
 
-            // Clear numerical inputs for the next entry
+            // Reset inputs for next exercise
+            document.getElementById('input-weight').value = '';
             document.getElementById('input-sets').value = '';
             document.getElementById('input-reps').value = '';
-            document.getElementById('input-weight').value = '';
             if (isCustomExerciseMode) {
                 document.getElementById('input-custom-exercise').value = '';
-                toggleCustomExerciseInput(); // revert to standard dropdown
+                toggleCustomExerciseInput();
             }
 
             renderDraftList();
-            showToast('Exercise added to draft', 'success');
+            showToast('Exercise staged', 'success');
         }
 
         function removeDraftItem(index) {
@@ -823,10 +781,9 @@
 
             if (currentDraftExercises.length === 0) {
                 listEl.innerHTML = `
-                    <div class="text-center py-6 text-gray-400 text-xs border border-dashed border-gray-200 rounded-xl">
+                    <div class="text-center py-5 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
                         <i class="ph ph-barbell text-2xl mb-1 opacity-60"></i>
-                        <p>No exercises staged for this session yet.</p>
-                        <p class="text-[10px] text-gray-400 mt-0.5">Use the form above or the AI parser to add items.</p>
+                        <p>No exercises staged in this draft yet.</p>
                     </div>
                 `;
                 commitBtn.disabled = true;
@@ -834,27 +791,25 @@
             }
 
             commitBtn.disabled = false;
-            let html = '';
-            currentDraftExercises.forEach((item, index) => {
+            listEl.innerHTML = currentDraftExercises.map((item, index) => {
                 const itemVol = item.sets * item.reps * item.weight;
-                html += `
-                    <div class="bg-gray-50 border border-gray-200/80 rounded-xl p-3 flex items-center justify-between">
+                return `
+                    <div class="bg-slate-50 border border-slate-200/90 rounded-xl p-2.5 flex items-center justify-between">
                         <div>
-                            <p class="text-xs font-bold text-gray-800">${item.name}</p>
-                            <p class="text-[11px] text-gray-500 font-medium">
-                                <span class="font-bold text-gray-800">${item.weight} kg</span> &bull; ${item.sets} sets &times; ${item.reps} reps
+                            <p class="text-xs font-bold text-slate-900">${item.name}</p>
+                            <p class="text-[11px] text-slate-500 font-medium">
+                                <span class="font-bold text-slate-800">${item.weight} kg</span> &bull; ${item.sets} sets &times; ${item.reps} reps
                             </p>
                         </div>
-                        <div class="flex items-center gap-3">
-                            <span class="text-[11px] font-bold text-primary">${itemVol.toLocaleString()} kg</span>
-                            <button onclick="removeDraftItem(${index})" class="text-gray-400 hover:text-red-500 p-1">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-[11px] font-bold text-indigo-600">${itemVol.toLocaleString()} kg</span>
+                            <button onclick="removeDraftItem(${index})" class="text-slate-400 hover:text-rose-500 p-1">
                                 <i class="ph-bold ph-x text-sm"></i>
                             </button>
                         </div>
                     </div>
                 `;
-            });
-            listEl.innerHTML = html;
+            }).join('');
         }
 
         function commitFullSession() {
@@ -864,18 +819,15 @@
                 showToast('Please select a workout date', 'error');
                 return;
             }
-
             if (currentDraftExercises.length === 0) {
                 showToast('Please add at least one exercise', 'error');
                 return;
             }
 
-            // Check if a session or calorie entry on this workout date already exists
             const existingIndex = sessionLogs.findIndex(s => s.date === dateVal);
             if (existingIndex > -1) {
-                // Merge exercises into that day's entry
                 sessionLogs[existingIndex].exercises.push(...currentDraftExercises.map(e => ({
-                    name: e.name, sets: e.sets, reps: e.reps, weight: e.weight
+                    name: e.name, weight: e.weight, sets: e.sets, reps: e.reps
                 })));
             } else {
                 sessionLogs.push({
@@ -884,142 +836,143 @@
                     garminCalories: 0,
                     timestamp: Date.now(),
                     exercises: currentDraftExercises.map(e => ({
-                        name: e.name, sets: e.sets, reps: e.reps, weight: e.weight
+                        name: e.name, weight: e.weight, sets: e.sets, reps: e.reps
                     }))
                 });
             }
 
             saveSessionLogs();
-
-            // Clear draft
             currentDraftExercises = [];
             renderDraftList();
-
             showToast(`Workout saved for ${dateVal}!`, 'success');
         }
 
-        async function parseNaturalLanguageWorkout() {
-            const inputField = document.getElementById('ai-quicklog-input');
-            const textPrompt = inputField.value.trim();
-            const btn = document.getElementById('btn-parse-ai');
+        function renderMuscleAnalysis() {
+            const barsContainer = document.getElementById('muscle-group-bars');
+            const alertContainer = document.getElementById('deficiency-alert-container');
+            if (!barsContainer || !alertContainer) return;
 
-            if (!textPrompt) {
-                showToast('Please type or dictate your workout', 'error');
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const recent = sessionLogs.filter(s => new Date(s.date + 'T00:00:00') >= thirtyDaysAgo);
+
+            const groupStats = {
+                "Chest": { sets: 0, volume: 0 },
+                "Back": { sets: 0, volume: 0 },
+                "Quads & Glutes": { sets: 0, volume: 0 },
+                "Hamstrings & Calves": { sets: 0, volume: 0 },
+                "Shoulders": { sets: 0, volume: 0 },
+                "Arms": { sets: 0, volume: 0 },
+                "Core": { sets: 0, volume: 0 }
+            };
+
+            let totalSets = 0;
+
+            recent.forEach(s => {
+                (s.exercises || []).forEach(e => {
+                    const group = getExerciseMuscleGroup(e.name);
+                    const groupKey = groupStats[group] ? group : "Chest";
+                    const itemSets = e.sets || 1;
+                    const itemVol = itemSets * (e.reps || 1) * (e.weight || 0);
+
+                    groupStats[groupKey].sets += itemSets;
+                    groupStats[groupKey].volume += itemVol;
+                    totalSets += itemSets;
+                });
+            });
+
+            if (totalSets === 0) {
+                alertContainer.innerHTML = `
+                    <div class="p-2.5 bg-slate-50 rounded-xl text-slate-500 text-xs flex items-center gap-2">
+                        <i class="ph ph-info text-base text-slate-400"></i>
+                        <span>Log exercises to view 30-day muscle balance and deficiency alerts.</span>
+                    </div>
+                `;
+                barsContainer.innerHTML = '';
                 return;
             }
 
-            btn.disabled = true;
-            btn.innerHTML = `<div class="spinner text-indigo-600"></div>`;
+            // Detect imbalances
+            const pushSets = groupStats["Chest"].sets + groupStats["Shoulders"].sets;
+            const pullSets = groupStats["Back"].sets;
+            const legSets = groupStats["Quads & Glutes"].sets + groupStats["Hamstrings & Calves"].sets;
+            const alerts = [];
 
-            // Leave apiKey as empty string or local override
-            const userApiKey = localStorage.getItem('fittrack_gemini_key') || "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${userApiKey}`;
-
-            const systemInstruction = `You are a gym workout parsing specialist.
-Extract exercises, sets, repetitions, and weight in kg from the user's freeform text.
-If total Garmin calories burned for the day (active + resting burn) are mentioned, extract that as integer in garminCalories (0 if not mentioned).
-Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squat', 'Pull-Up').`;
-
-            const payload = {
-                contents: [{ parts: [{ text: textPrompt }] }],
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            "garminCalories": { "type": "INTEGER" },
-                            "exercises": {
-                                "type": "ARRAY",
-                                "items": {
-                                    "type": "OBJECT",
-                                    "properties": {
-                                        "name": { "type": "STRING" },
-                                        "sets": { "type": "INTEGER" },
-                                        "reps": { "type": "INTEGER" },
-                                        "weight": { "type": "NUMBER" }
-                                    },
-                                    "required": ["name", "sets", "reps", "weight"]
-                                }
-                            }
-                        },
-                        "required": ["exercises"]
-                    }
-                }
-            };
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+            if (pushSets > pullSets * 1.5 && pullSets < 15) {
+                alerts.push({
+                    type: 'warning',
+                    text: `<strong>Push/Pull Imbalance:</strong> Push volume (${pushSets} sets) is significantly higher than Pull (${pullSets} sets). Add rows or pull-downs.`
                 });
-
-                const result = await response.json();
-                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                if (jsonText) {
-                    const parsed = JSON.parse(jsonText);
-                    
-                    if (parsed.garminCalories && parsed.garminCalories > 0) {
-                        document.getElementById('garmin-calories').value = parsed.garminCalories;
-                    }
-
-                    if (parsed.exercises && parsed.exercises.length > 0) {
-                        parsed.exercises.forEach(ex => {
-                            // Ensure name exists in library
-                            if (!exerciseLibrary.some(e => e.toLowerCase() === ex.name.toLowerCase())) {
-                                exerciseLibrary.push(ex.name);
-                            }
-                            currentDraftExercises.push({
-                                id: 'draft_' + Math.random().toString(36).substr(2, 6),
-                                name: ex.name,
-                                sets: ex.sets || 3,
-                                reps: ex.reps || 10,
-                                weight: ex.weight || 0
-                            });
-                        });
-                        saveExerciseLibrary();
-                        renderDraftList();
-                        inputField.value = '';
-                        showToast(`Parsed ${parsed.exercises.length} exercises!`, 'success');
-                    } else {
-                        showToast('Could not find exercises in that text', 'error');
-                    }
-                } else {
-                    throw new Error(result.error?.message || "Invalid LLM response");
-                }
-            } catch(e) {
-                console.error("AI Parse Error:", e);
-                showToast('AI parser error: ' + (e.message || 'Failed to parse'), 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = `<i class="ph-bold ph-magic-wand"></i><span>Parse</span>`;
             }
+            if (legSets < (totalSets * 0.18)) {
+                alerts.push({
+                    type: 'warning',
+                    text: `<strong>Leg Deficiency Flagged:</strong> Leg training is only ${Math.round((legSets / totalSets) * 100)}% of total volume.`
+                });
+            }
+            if (groupStats["Quads & Glutes"].sets > groupStats["Hamstrings & Calves"].sets * 2 && groupStats["Quads & Glutes"].sets >= 8) {
+                alerts.push({
+                    type: 'info',
+                    text: `<strong>Posterior Chain Check:</strong> Hamstrings are lagging behind quads. Consider Romanian deadlifts or hamstring curls.`
+                });
+            }
+            if (alerts.length === 0) {
+                alerts.push({
+                    type: 'success',
+                    text: `<strong>Balanced Split:</strong> Great job! Volume is evenly distributed across major muscle groups over the last 30 days.`
+                });
+            }
+
+            alertContainer.innerHTML = alerts.map(a => {
+                const isWarn = a.type === 'warning';
+                const isSuccess = a.type === 'success';
+                const bg = isWarn ? 'bg-amber-50 text-amber-800 border-amber-200' : isSuccess ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-sky-50 text-sky-800 border-sky-200';
+                const icon = isWarn ? 'ph-bold ph-warning-circle text-amber-500' : isSuccess ? 'ph-bold ph-check-circle text-emerald-500' : 'ph-bold ph-info text-sky-500';
+                return `
+                    <div class="p-2.5 rounded-xl border text-[11px] leading-snug flex items-start gap-2 ${bg}">
+                        <i class="${icon} text-base shrink-0 mt-0.5"></i>
+                        <span>${a.text}</span>
+                    </div>
+                `;
+            }).join('');
+
+            barsContainer.innerHTML = Object.entries(groupStats).map(([group, stat]) => {
+                const percent = Math.round((stat.sets / totalSets) * 100) || 0;
+                const color = MUSCLE_GROUPS[group]?.color || '#4F46E5';
+                return `
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs font-semibold">
+                            <span class="text-slate-700">${group}</span>
+                            <span class="text-slate-400 text-[11px]">${stat.sets} sets &bull; ${stat.volume.toLocaleString()} kg (${percent}%)</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-500" style="width: ${percent}%; background-color: ${color};"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderHistoryTab() {
             const container = document.getElementById('history-grouped-container');
             const totalLabel = document.getElementById('history-total-sessions');
-
             totalLabel.textContent = `${sessionLogs.length} date entries`;
 
             if (sessionLogs.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">
-                        <i class="ph ph-calendar-blank text-4xl text-gray-300 mb-2"></i>
-                        <p class="text-sm font-semibold text-gray-600">No logs recorded yet</p>
-                        <p class="text-xs text-gray-400 mt-0.5">Your workout and calorie records will appear here.</p>
+                    <div class="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+                        <i class="ph ph-calendar-blank text-4xl text-slate-300 mb-2"></i>
+                        <p class="text-xs font-bold text-slate-600">No logs recorded yet</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Your workouts and Garmin burn will appear here.</p>
                     </div>
                 `;
                 return;
             }
 
-            let html = '';
-            sessionLogs.forEach((session, sessionIdx) => {
+            container.innerHTML = sessionLogs.map((session, sIdx) => {
                 let sessionVolume = 0;
                 (session.exercises || []).forEach(e => {
-                    sessionVolume += (e.sets * e.reps * e.weight);
+                    sessionVolume += ((e.sets || 0) * (e.reps || 0) * (e.weight || 0));
                 });
 
                 const formattedDate = new Date(session.date + 'T00:00:00').toLocaleDateString(undefined, {
@@ -1029,56 +982,53 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                 const hasExercises = session.exercises && session.exercises.length > 0;
                 const hasGarmin = session.garminCalories && session.garminCalories > 0;
 
-                html += `
-                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-                        <div class="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                return `
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
                             <div>
-                                <span class="text-xs font-black text-gray-900">${formattedDate}</span>
-                                <p class="text-[11px] text-gray-400 font-medium">
-                                    ${hasExercises ? `${session.exercises.length} exercises logged` : 'Rest / Garmin-only day'}
+                                <span class="text-xs font-black text-slate-900">${formattedDate}</span>
+                                <p class="text-[10px] text-slate-400 font-medium">
+                                    ${hasExercises ? `${session.exercises.length} exercise${session.exercises.length === 1 ? '' : 's'}` : 'Rest Day / Garmin Only'}
                                 </p>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5">
                                 ${hasGarmin ? `
-                                    <span class="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100 flex items-center gap-1" title="Garmin Total Daily Burn (Active + Resting)">
-                                        <i class="ph-fill ph-flame text-sky-500"></i> ${session.garminCalories.toLocaleString()} kcal
+                                    <span class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100 flex items-center gap-1">
+                                        <i class="ph-fill ph-flame text-purple-500"></i> ${session.garminCalories.toLocaleString()} kcal
                                     </span>
                                 ` : ''}
                                 ${hasExercises ? `
-                                    <span class="text-xs font-bold text-primary bg-indigo-50 px-2 py-0.5 rounded-md">
+                                    <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
                                         ${sessionVolume.toLocaleString()} kg
                                     </span>
                                 ` : ''}
-                                <button onclick="deleteSession(${sessionIdx})" class="text-gray-300 hover:text-red-500 p-1">
+                                <button onclick="deleteSession(${sIdx})" class="text-slate-300 hover:text-rose-500 p-1">
                                     <i class="ph-bold ph-trash text-sm"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Exercise details table or rest day notice -->
                         ${hasExercises ? `
                             <div class="space-y-1.5">
                                 ${session.exercises.map(ex => `
-                                    <div class="flex justify-between items-center text-xs py-1 border-b border-gray-50 last:border-0">
-                                        <span class="font-semibold text-gray-700">${ex.name}</span>
-                                        <div class="text-gray-500">
-                                            <span class="font-bold text-gray-800">${ex.weight} kg</span>
-                                            <span class="text-gray-300 mx-1">&bull;</span>
+                                    <div class="flex justify-between items-center text-xs py-1 border-b border-slate-50 last:border-0">
+                                        <span class="font-semibold text-slate-700">${ex.name}</span>
+                                        <div class="text-slate-500">
+                                            <span class="font-bold text-slate-900">${ex.weight} kg</span>
+                                            <span class="text-slate-300 mx-1">&bull;</span>
                                             <span class="font-medium">${ex.sets} &times; ${ex.reps}</span>
                                         </div>
                                     </div>
                                 `).join('')}
                             </div>
                         ` : `
-                            <p class="text-[11px] text-gray-400 italic py-1 flex items-center gap-1.5">
+                            <p class="text-[11px] text-slate-400 italic py-1 flex items-center gap-1.5">
                                 <i class="ph ph-bed"></i> No resistance exercises recorded for this day.
                             </p>
                         `}
                     </div>
                 `;
-            });
-
-            container.innerHTML = html;
+            }).join('');
         }
 
         function deleteSession(index) {
@@ -1090,11 +1040,10 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
         function populateChartExerciseFilter() {
             const select = document.getElementById('chart-exercise-filter');
             const currentVal = select.value;
-            
-            // Gather all exercises present in history
             const present = new Set();
+
             sessionLogs.forEach(s => {
-                s.exercises.forEach(e => present.add(e.name));
+                (s.exercises || []).forEach(e => present.add(e.name));
             });
 
             const sorted = Array.from(present).sort();
@@ -1124,9 +1073,7 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                 return;
             }
 
-            // Group dates in chronological order (oldest to newest)
             const chronological = [...sessionLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
-
             const labels = [];
             const volumeData = [];
             const calorieData = [];
@@ -1137,11 +1084,10 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
 
             chronological.forEach(s => {
                 const dateLabel = new Date(s.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
-                
                 let dayVolume = 0;
-                s.exercises.forEach(e => {
+                (s.exercises || []).forEach(e => {
                     if (filter === 'ALL' || e.name === filter) {
-                        dayVolume += (e.sets * e.reps * e.weight);
+                        dayVolume += ((e.sets || 0) * (e.reps || 0) * (e.weight || 0));
                     }
                 });
 
@@ -1156,10 +1102,10 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                 }
             });
 
-            volSummary.textContent = `${totalVolumeSum.toLocaleString()} kg total`;
-            calSummary.textContent = activeGarminDays > 0 ? `${Math.round(totalCaloriesSum / activeGarminDays)} kcal avg` : 'No Garmin data';
+            volSummary.textContent = `${totalVolumeSum.toLocaleString()} kg`;
+            calSummary.textContent = activeGarminDays > 0 ? `${Math.round(totalCaloriesSum / activeGarminDays)} kcal avg` : 'No burn data';
 
-            // 1. Lift Volume Line Chart
+            // 1. Volume Chart
             volumeEmpty.classList.add('hidden');
             const volCtx = document.getElementById('volumeChart').getContext('2d');
             if (volumeChartInstance) volumeChartInstance.destroy();
@@ -1187,13 +1133,13 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        y: { beginAtZero: true, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 } } },
+                        y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
                         x: { grid: { display: false }, ticks: { font: { size: 10 } } }
                     }
                 }
             });
 
-            // 2. Garmin Calorie Bar Chart
+            // 2. Garmin Calorie Chart
             const hasCalories = calorieData.some(c => c > 0);
             if (!hasCalories) {
                 caloriesEmpty.classList.remove('hidden');
@@ -1208,7 +1154,7 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Garmin Calories',
+                            label: 'Garmin Daily Burn',
                             data: calorieData,
                             backgroundColor: '#0284C7',
                             borderRadius: 6
@@ -1219,7 +1165,7 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
                         scales: {
-                            y: { beginAtZero: true, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 } } },
+                            y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
                             x: { grid: { display: false }, ticks: { font: { size: 10 } } }
                         }
                     }
@@ -1231,7 +1177,6 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
             const userApiKey = localStorage.getItem('fittrack_gemini_key') || "";
             const customQuery = document.getElementById('ai-custom-prompt').value.trim();
 
-            const responseBox = document.getElementById('ai-response-box');
             const idleState = document.getElementById('ai-idle-state');
             const loadingState = document.getElementById('ai-loading-state');
             const resultContent = document.getElementById('ai-result-content');
@@ -1242,40 +1187,48 @@ Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squ
             loadingState.classList.remove('hidden');
             loadingState.classList.add('flex');
 
-            // Package recent workout summary (last 10 sessions)
             const recentSessions = sessionLogs.slice(0, 10).map(s => {
-                const exList = s.exercises.map(e => `${e.name}: ${e.sets}x${e.reps} @ ${e.weight}kg`).join(', ');
+                const exList = (s.exercises || []).map(e => `${e.name}: ${e.weight}kg (${e.sets}x${e.reps})`).join(', ');
                 return `Date: ${s.date} | Garmin Burn: ${s.garminCalories || 'N/A'} kcal | Exercises: [${exList}]`;
             }).join('\n');
 
             let systemPrompt = "";
             let userPrompt = "";
 
-            if (mode === 'next_workout') {
+            if (mode === 'muscle_deficiency') {
+                titleEl.textContent = "Muscle Balance & Deficiency Audit";
+                systemPrompt = `You are an elite strength & conditioning coach specializing in biomechanics and muscular balance.
+Analyze the user's workout history across muscle groups (Chest, Back, Quads, Hamstrings, Shoulders, Arms, Core).
+Highlight:
+1. Muscle groups that are over-trained vs under-trained (push/pull ratio, upper vs lower body balance).
+2. Potential postural or injury risks (e.g. rounded shoulders from lack of rear delt/row volume).
+3. A concrete 3-exercise corrective prescription to balance out lagging muscle groups.
+Format in clean Markdown with bold headers and bullet points.`;
+                userPrompt = `Here is my recent workout history:\n${recentSessions || 'No history logged yet.'}\n${customQuery ? 'Specific question: ' + customQuery : ''}`;
+            } else if (mode === 'next_workout') {
                 titleEl.textContent = "AI Next Session Plan";
                 systemPrompt = `You are an elite strength and conditioning coach.
 Analyze the user's recent workout logs. Suggest an optimal workout session to perform next (Push, Pull, Legs, or targeted upper/lower).
-Specify exercise names, target sets, rep ranges, recommended load progression, and warm-up recommendations.
-Format using clean Markdown with bold exercise names and bullet points.`;
+Specify exercise names, target weight/progression, sets, rep ranges, and warm-up tips.
+Format using clean Markdown with bold exercise names.`;
                 userPrompt = `Here is my recent workout history:\n${recentSessions || 'No history logged yet.'}\n${customQuery ? 'Additional user request: ' + customQuery : ''}`;
             } else if (mode === 'garmin_recovery') {
                 titleEl.textContent = "Garmin Recovery & Energy Analysis";
                 systemPrompt = `You are a sports nutritionist and recovery physiologist.
-Evaluate the user's lifting volume against their daily Garmin calorie expenditure.
-Assess if they are in an aggressive deficit risking muscle loss, provide target post-workout carbohydrate & protein grams, and hydration/sleep recovery rules.
+Evaluate the user's lifting volume against their daily Garmin calorie expenditure (total active + resting burn).
+Assess if they are in an aggressive deficit risking muscle loss, provide target post-workout carbohydrate & protein grams, and hydration/sleep rules.
 Format with clean Markdown, concise bullet points, and practical action items.`;
                 userPrompt = `Here is my workout history including daily Garmin calorie burn values:\n${recentSessions || 'No history logged yet.'}\n${customQuery ? 'Specific question: ' + customQuery : ''}`;
             } else if (mode === 'exercise_sub') {
                 titleEl.textContent = "Smart Exercise Substitutions";
                 systemPrompt = `You are a certified biomechanics specialist and fitness trainer.
 Provide 3 joint-friendly or gym-equipment alternatives for common compound exercises, including key setup cues to avoid injury and maximize hypertrophy.
-Format with clean Markdown with bold cues.`;
+Format with clean Markdown.`;
                 userPrompt = `Here is my exercise list:\n${exerciseLibrary.join(', ')}\nUser specific need: ${customQuery || 'Provide joint-friendly alternatives and cues for Squats, Bench Press, and Overhead Press.'}`;
             }
 
             try {
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${userApiKey}`;
-                
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${userApiKey}`;
                 const payload = {
                     contents: [{ parts: [{ text: userPrompt }] }],
                     systemInstruction: { parts: [{ text: systemPrompt }] }
@@ -1295,17 +1248,17 @@ Format with clean Markdown with bold cues.`;
                     loadingState.classList.add('hidden');
                     loadingState.classList.remove('flex');
                     resultContent.classList.remove('hidden');
-                    showToast('AI Coach updated!', 'success');
+                    showToast('Coach analysis ready', 'success');
                 } else {
-                    throw new Error(result.error?.message || "Invalid response format from Gemini");
+                    throw new Error(result.error?.message || "Please add your Gemini API Key in Settings to enable the AI coach.");
                 }
             } catch(e) {
-                console.error("Gemini Coach Error:", e);
                 loadingState.classList.add('hidden');
                 loadingState.classList.remove('flex');
                 resultContent.innerHTML = `
-                    <div class="p-3 bg-red-50 text-red-600 rounded-xl text-xs">
-                        <strong>Error calling Gemini API:</strong> ${e.message || 'Please check your connection'}
+                    <div class="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs space-y-1">
+                        <strong class="font-bold">Coach Notice:</strong>
+                        <p>${e.message || 'Please check your connection and ensure your Gemini API Key is entered in Settings.'}</p>
                     </div>
                 `;
                 resultContent.classList.remove('hidden');
@@ -1315,7 +1268,6 @@ Format with clean Markdown with bold cues.`;
         function copyAIResponse() {
             const content = document.getElementById('ai-result-content');
             if (!content.innerText) return;
-
             const temp = document.createElement('textarea');
             temp.value = content.innerText;
             document.body.appendChild(temp);
@@ -1337,7 +1289,7 @@ Format with clean Markdown with bold cues.`;
             countLabel.textContent = `${exerciseLibrary.length} exercises`;
 
             container.innerHTML = exerciseLibrary.map(name => `
-                <span class="inline-flex items-center gap-1 bg-white text-gray-700 text-[10px] font-semibold px-2 py-1 rounded-md border border-gray-200">
+                <span class="inline-flex items-center gap-1 bg-white text-slate-700 text-[10px] font-semibold px-2 py-1 rounded-md border border-slate-200">
                     ${name}
                 </span>
             `).join('');
@@ -1363,45 +1315,48 @@ Format with clean Markdown with bold cues.`;
             sessionLogs = [];
             currentDraftExercises = [];
             localStorage.removeItem('fittrack_sessions');
-            localStorage.removeItem('fittrack_workouts');
             renderDraftList();
             renderHistoryTab();
             populateChartExerciseFilter();
             renderCharts();
-            showToast('All workouts deleted from device', 'error');
+            renderMuscleAnalysis();
+            showToast('All local workout logs cleared', 'error');
         }
 
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => {
                 el.classList.add('hidden');
-                el.classList.remove('block');
             });
 
             document.querySelectorAll('nav button').forEach(btn => {
-                btn.classList.remove('tab-active');
-                btn.classList.add('tab-inactive');
+                btn.classList.remove('text-indigo-600');
+                btn.classList.add('text-slate-400');
                 const icon = btn.querySelector('i');
-                icon.classList.remove('ph-fill');
-                icon.classList.add('ph');
+                icon.className = icon.className.replace('ph-fill', 'ph');
+                const label = btn.querySelector('span');
+                label.classList.remove('font-bold');
+                label.classList.add('font-medium');
             });
 
             const activeContent = document.getElementById(`content-${tabId}`);
             if (activeContent) {
                 activeContent.classList.remove('hidden');
-                activeContent.classList.add('block');
             }
 
             const activeBtn = document.getElementById(`tab-${tabId}`);
             if (activeBtn) {
-                activeBtn.classList.remove('tab-inactive');
-                activeBtn.classList.add('tab-active');
+                activeBtn.classList.remove('text-slate-400');
+                activeBtn.classList.add('text-indigo-600');
                 const icon = activeBtn.querySelector('i');
-                icon.classList.remove('ph');
-                icon.classList.add('ph-fill');
+                icon.className = icon.className.replace('ph ', 'ph-fill ');
+                const label = activeBtn.querySelector('span');
+                label.classList.add('font-bold');
+                label.classList.remove('font-medium');
             }
 
             if (tabId === 'progress') {
                 renderCharts();
+                renderMuscleAnalysis();
             }
         }
 
@@ -1412,20 +1367,18 @@ Format with clean Markdown with bold cues.`;
             const icon = document.getElementById('toast-icon');
 
             text.textContent = msg;
-            if (type === 'error') {
-                icon.className = "ph-bold ph-warning-circle text-rose-400 text-base";
-            } else {
-                icon.className = "ph-bold ph-check-circle text-emerald-400 text-base";
-            }
+            icon.className = type === 'error' 
+                ? "ph-bold ph-warning-circle text-rose-400 text-base" 
+                : "ph-bold ph-check-circle text-emerald-400 text-base";
 
-            toast.classList.remove('-translate-y-10', 'opacity-0', 'pointer-events-none');
+            toast.classList.remove('-translate-y-12', 'opacity-0', 'pointer-events-none');
             toast.classList.add('translate-y-0', 'opacity-100');
 
             if (toastTimeout) clearTimeout(toastTimeout);
             toastTimeout = setTimeout(() => {
-                toast.classList.add('-translate-y-10', 'opacity-0', 'pointer-events-none');
+                toast.classList.add('-translate-y-12', 'opacity-0', 'pointer-events-none');
                 toast.classList.remove('translate-y-0', 'opacity-100');
-            }, 2500);
+            }, 2600);
         }
     </script>
 </body>
