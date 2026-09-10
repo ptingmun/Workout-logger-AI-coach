@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- iOS Web App Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FitTrack AI">
+    
+    <title>FitTrack - Workout & Calorie Tracker with AI</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js for volume and calorie visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Marked for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5', // Indigo 600
+                        primaryDark: '#4338CA',
+                        garmin: '#0284C7', // Sky 600 for Garmin metrics
+                        accent: '#8B5CF6', // Purple
+                        iosbg: '#F2F2F7',
+                        cardbg: '#FFFFFF'
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { 
+            font-family: '-apple-system', 'BlinkMacSystemFont', 'Inter', sans-serif; 
+            background-color: #F2F2F7;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Mobile tab styling */
+        .tab-active { color: #4F46E5; }
+        .tab-inactive { color: #9CA3AF; }
+        
+        /* Hide scrollbars for app-like presentation */
+        ::-webkit-scrollbar { display: none; }
+        
+        /* Spinning loader */
+        .spinner {
+            border: 2.5px solid rgba(0,0,0,0.1);
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            border-left-color: currentColor;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Markdown rendered prose styling */
+        .prose h3 { font-size: 1.05rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.35rem; color: #1F2937; }
+        .prose p { margin-bottom: 0.65rem; color: #4B5563; font-size: 0.875rem; line-height: 1.5; }
+        .prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; color: #4B5563; font-size: 0.875rem; }
+        .prose li { margin-bottom: 0.25rem; }
+        .prose strong { color: #111827; font-weight: 600; }
+
+        .content-area { padding-bottom: 100px; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased h-screen flex flex-col overflow-hidden selection:bg-indigo-100">
+
+    <header class="bg-white/95 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 shrink-0">
+        <div class="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-primary font-black tracking-tight text-lg">
+                <div class="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-primary shadow-sm">
+                    <i class="ph-fill ph-barbell text-xl"></i>
+                </div>
+                <span>FitTrack<span class="text-xs font-bold text-accent ml-1 px-1.5 py-0.5 bg-purple-50 rounded-md border border-purple-200">AI</span></span>
+            </div>
+
+            <!-- Status Indicator -->
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Phone Storage</span>
+            </div>
+        </div>
+    </header>
+
+    <div id="toast-banner" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 transform -translate-y-10 opacity-0 pointer-events-none max-w-xs w-full px-4">
+        <div id="toast-content" class="bg-gray-900/95 text-white text-xs font-medium px-4 py-2.5 rounded-2xl shadow-lg backdrop-blur flex items-center justify-between gap-2 border border-white/10">
+            <span id="toast-message">Notification message</span>
+            <i id="toast-icon" class="ph-bold ph-check text-emerald-400 text-sm"></i>
+        </div>
+    </div>
+
+    <main class="flex-1 w-full max-w-md mx-auto overflow-y-auto content-area relative p-4 space-y-4">
+        
+        <!-- ============================================== -->
+        <!-- TAB 1: LOG WORKOUT & GARMIN CALORIES -->
+        <!-- ============================================== -->
+        <div id="content-log" class="tab-content block space-y-4">
+            
+            <!-- Date & Garmin Calorie Burn Card -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="ph-fill ph-flame text-sky-500 text-sm"></i> Garmin Calorie Burn
+                    </span>
+                    <span class="text-xs text-sky-700 font-semibold bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">Daily Total (Active + Resting)</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex flex-col">
+                        <label class="h-5 flex items-center text-[11px] font-bold text-gray-400 uppercase mb-1.5">Date</label>
+                        <input type="date" id="session-date" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-primary outline-none transition-all">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="h-5 flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase mb-1.5">
+                            <span class="truncate">Total Daily Burn</span>
+                            <span class="text-[10px] text-sky-600 font-semibold lowercase shrink-0 ml-1">kcal</span>
+                        </label>
+                        <div class="relative w-full">
+                            <input type="number" id="session-garmin-calories" min="0" placeholder="e.g. 2450" class="w-full h-11 rounded-xl bg-gray-50 border border-gray-200 px-3 pl-8 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-garmin outline-none transition-all">
+                            <i class="ph-fill ph-flame text-sky-500 absolute left-2.5 top-1/2 -translate-y-1/2 text-base pointer-events-none"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Quick Natural Language Workout Logger -->
+            <div class="bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 rounded-2xl p-4 text-white shadow-md space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 text-xs font-bold tracking-wide uppercase">
+                        <i class="ph-fill ph-sparkle text-amber-300 text-sm"></i>
+                        <span>AI Smart Log (Voice or Text)</span>
+                    </div>
+                    <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-medium">Gemini 3 Flash</span>
+                </div>
+                <p class="text-xs text-indigo-100 leading-relaxed">
+                    Dictate or paste your workout session. Gemini will extract exercises, sets, weights, and Garmin calories into your draft.
+                </p>
+                <div class="flex gap-2">
+                    <input type="text" id="ai-quicklog-input" placeholder="e.g., 3 sets bench press 80kg 10 reps, 3 sets pullups 12 reps, 600 garmin kcal" class="flex-1 rounded-xl bg-white/95 text-gray-800 placeholder-gray-400 px-3 py-2.5 text-xs font-medium outline-none focus:ring-2 focus:ring-white">
+                    <button type="button" onclick="parseNaturalLanguageWorkout()" id="btn-parse-ai" class="bg-white text-indigo-600 hover:bg-indigo-50 font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-1 shrink-0 transition-all active:scale-95 shadow-sm">
+                        <i class="ph-bold ph-magic-wand"></i>
+                        <span>Parse</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Add Individual Exercise Form -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3.5">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                        <i class="ph-bold ph-plus-circle text-primary text-base"></i> Add Exercise to Today
+                    </h3>
+                    <button type="button" onclick="toggleCustomExerciseInput()" id="btn-toggle-custom" class="text-[11px] font-semibold text-primary hover:underline">
+                        + New Custom Name
+                    </button>
+                </div>
+
+                <!-- Standardized Select or Custom Text -->
+                <div id="select-exercise-container">
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1">Standardized Exercise</label>
+                    <select id="input-standard-exercise" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-primary outline-none">
+                        <!-- Populated dynamically via JS -->
+                    </select>
+                </div>
+
+                <div id="custom-exercise-container" class="hidden">
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 flex items-center justify-between">
+                        <span>New Exercise Name</span>
+                        <span class="text-[10px] text-gray-400">Saves to your library</span>
+                    </label>
+                    <input type="text" id="input-custom-exercise" placeholder="e.g. Incline Dumbbell Hammer Curl" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-primary outline-none">
+                </div>
+
+                <!-- Sets, Reps, Weight Inputs -->
+                <div class="grid grid-cols-3 gap-2.5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 text-center">Sets</label>
+                        <input type="number" id="input-sets" min="1" max="99" placeholder="3" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-center text-sm font-bold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 text-center">Reps</label>
+                        <input type="number" id="input-reps" min="1" max="999" placeholder="10" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-center text-sm font-bold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1 text-center">Weight (kg)</label>
+                        <input type="number" id="input-weight" min="0" step="0.5" placeholder="60" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-center text-sm font-bold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
+                    </div>
+                </div>
+
+                <button type="button" onclick="addExerciseToDraft()" class="w-full bg-gray-900 hover:bg-black active:bg-gray-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                    <i class="ph-bold ph-plus"></i> Add to Session List
+                </button>
+            </div>
+
+            <!-- Today's Staged Workout Session List -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                        <span>Current Session Draft</span>
+                        <span id="staged-count-badge" class="ml-1 bg-gray-100 text-gray-700 text-[10px] px-2 py-0.5 rounded-full font-bold">0 exercises</span>
+                    </h3>
+                    <span id="staged-volume-badge" class="text-xs font-bold text-primary">0 kg volume</span>
+                </div>
+
+                <div id="staged-exercises-list" class="space-y-2">
+                    <div class="text-center py-6 text-gray-400 text-xs border border-dashed border-gray-200 rounded-xl">
+                        <i class="ph ph-barbell text-2xl mb-1 opacity-60"></i>
+                        <p>No exercises staged for this session yet.</p>
+                        <p class="text-[10px] text-gray-400 mt-0.5">Use the form above or the AI parser to add items.</p>
+                    </div>
+                </div>
+
+                <!-- Commit session button -->
+                <button type="button" onclick="commitFullSession()" id="btn-commit-session" disabled class="w-full bg-primary hover:bg-primaryDark disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-100 disabled:shadow-none">
+                    <i class="ph-bold ph-floppy-disk"></i> Save Complete Workout Session
+                </button>
+            </div>
+
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TAB 2: WORKOUT & CALORIE HISTORY -->
+        <!-- ============================================== -->
+        <div id="content-history" class="tab-content hidden space-y-4">
+            <div class="flex justify-between items-center px-1">
+                <div>
+                    <h2 class="text-xl font-black text-gray-900">Workout History</h2>
+                    <p class="text-xs text-gray-500">Grouped daily workouts with Garmin daily burn (active + resting)</p>
+                </div>
+                <span class="text-xs font-bold text-primary bg-indigo-50 px-2.5 py-1 rounded-full" id="history-total-sessions">0 sessions</span>
+            </div>
+
+            <div id="history-grouped-container" class="space-y-3 pb-6">
+                <!-- Injected via JavaScript -->
+            </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TAB 3: PROGRESS & CALORIE CHARTS -->
+        <!-- ============================================== -->
+        <div id="content-progress" class="tab-content hidden space-y-4">
+            <div class="px-1">
+                <h2 class="text-xl font-black text-gray-900">Analytics & Trends</h2>
+                <p class="text-xs text-gray-500">Track volume progression alongside Garmin expenditure</p>
+            </div>
+
+            <!-- Metric Filter -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1.5">Focus Exercise</label>
+                    <select id="chart-exercise-filter" onchange="renderCharts()" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-primary outline-none">
+                        <option value="ALL">Total Overall Volume (All Exercises)</option>
+                    </select>
+                </div>
+
+                <!-- Lift Volume Chart -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-sm bg-primary"></span> Lifting Volume (kg)
+                        </span>
+                        <span id="chart-volume-summary" class="text-[11px] font-semibold text-gray-400">--</span>
+                    </div>
+                    <div class="w-full h-52 relative">
+                        <canvas id="volumeChart"></canvas>
+                        <div id="volume-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white/95 rounded-xl hidden">
+                            <i class="ph ph-chart-line text-3xl mb-1 opacity-50"></i>
+                            <p class="text-xs font-medium">Log sessions to view volume progression</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Garmin Calorie Expenditure Chart -->
+                <div class="pt-3 border-t border-gray-100">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-sm bg-sky-500"></span> Garmin Calorie Burn (Active + Resting)
+                        </span>
+                        <span id="chart-calories-summary" class="text-[11px] font-semibold text-gray-400">--</span>
+                    </div>
+                    <div class="w-full h-40 relative">
+                        <canvas id="garminCalorieChart"></canvas>
+                        <div id="calories-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white/95 rounded-xl hidden">
+                            <i class="ph ph-flame text-3xl mb-1 opacity-50"></i>
+                            <p class="text-xs font-medium">Add Garmin daily calories to view trends</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TAB 4: GEMINI AI COACH STUDIO -->
+        <!-- ============================================== -->
+        <div id="content-coach" class="tab-content hidden space-y-4">
+            <div class="px-1">
+                <h2 class="text-xl font-black text-gray-900">Gemini AI Coach</h2>
+                <p class="text-xs text-gray-500">Intelligent wellness insights powered by Gemini 3 Flash</p>
+            </div>
+
+            <!-- AI Mode Selector Cards -->
+            <div class="grid grid-cols-1 gap-2.5">
+                <!-- Tool 1: Next Workout Plan -->
+                <div onclick="requestAIFeature('next_workout')" class="bg-gradient-to-r from-indigo-500 to-indigo-700 text-white rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all relative overflow-hidden group">
+                    <div class="relative z-10 flex items-start justify-between">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-1.5 font-bold text-sm">
+                                <i class="ph-fill ph-barbell text-amber-300 text-base"></i>
+                                <span>Generate Next Session Plan</span>
+                            </div>
+                            <p class="text-xs text-indigo-100 max-w-[260px] leading-relaxed">
+                                Builds today's ideal split, set/rep ranges, and progressive overload targets from your past logs.
+                            </p>
+                        </div>
+                        <span class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:translate-x-0.5 transition-transform">
+                            <i class="ph-bold ph-arrow-right"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Tool 2: Energy & Calorie Recovery Analysis -->
+                <div onclick="requestAIFeature('garmin_recovery')" class="bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all relative overflow-hidden group">
+                    <div class="relative z-10 flex items-start justify-between">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-1.5 font-bold text-sm">
+                                <i class="ph-fill ph-heartbeat text-rose-300 text-base"></i>
+                                <span>Garmin Energy & Recovery Coach</span>
+                            </div>
+                            <p class="text-xs text-sky-100 max-w-[260px] leading-relaxed">
+                                Evaluates volume vs Garmin calorie expenditure to flag overtraining and advise protein & carb timing.
+                            </p>
+                        </div>
+                        <span class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:translate-x-0.5 transition-transform">
+                            <i class="ph-bold ph-arrow-right"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Tool 3: Exercise Substitution & Form Advice -->
+                <div onclick="requestAIFeature('exercise_sub')" class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all relative overflow-hidden group">
+                    <div class="relative z-10 flex items-start justify-between">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-1.5 font-bold text-sm">
+                                <i class="ph-fill ph-repeat text-emerald-300 text-base"></i>
+                                <span>Smart Substitution & Form Cues</span>
+                            </div>
+                            <p class="text-xs text-purple-100 max-w-[260px] leading-relaxed">
+                                Need joint-friendly swaps or cues for lagging lifts? Ask Gemini for targeted biomechanical advice.
+                            </p>
+                        </div>
+                        <span class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:translate-x-0.5 transition-transform">
+                            <i class="ph-bold ph-arrow-right"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Input Box for custom prompt customization -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2">
+                <label class="block text-[11px] font-bold text-gray-400 uppercase">Optional Specific Question / Focus for Coach</label>
+                <input type="text" id="ai-custom-prompt" placeholder="e.g. Focus on chest & triceps, or my lower back is feeling stiff today" class="w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-primary">
+            </div>
+
+            <!-- AI Output Card -->
+            <div id="ai-response-box" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3 min-h-[160px] relative">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-indigo-50 text-primary flex items-center justify-center">
+                            <i class="ph-fill ph-robot text-lg"></i>
+                        </div>
+                        <h4 id="ai-response-title" class="text-sm font-bold text-gray-800">Coach Gemini Ready</h4>
+                    </div>
+                    <button onclick="copyAIResponse()" id="btn-copy-ai" class="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1 font-semibold">
+                        <i class="ph ph-copy"></i> Copy
+                    </button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="ai-loading-state" class="hidden py-10 flex-col items-center justify-center gap-2.5">
+                    <div class="spinner text-primary"></div>
+                    <p class="text-xs font-semibold text-gray-500 animate-pulse">Consulting Gemini 3 Flash...</p>
+                </div>
+
+                <!-- Idle State -->
+                <div id="ai-idle-state" class="text-center py-8 text-gray-400 space-y-1">
+                    <i class="ph ph-sparkle text-3xl opacity-40"></i>
+                    <p class="text-xs font-medium">Tap any of the 3 coach cards above to get instant personalized feedback.</p>
+                </div>
+
+                <!-- Result Markdown Container -->
+                <div id="ai-result-content" class="prose hidden">
+                    <!-- Markdown rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TAB 5: SETTINGS & DATA TOOLS -->
+        <!-- ============================================== -->
+        <div id="content-settings" class="tab-content hidden space-y-4">
+            <div class="px-1">
+                <h2 class="text-xl font-black text-gray-900">Settings</h2>
+                <p class="text-xs text-gray-500">Configure Gemini API key and manage stored device data</p>
+            </div>
+
+            <!-- Gemini Key Card -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                        <i class="ph-fill ph-key text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-800">Gemini API Key</h3>
+                        <p class="text-xs text-gray-500">Optional: override key for your custom deployment</p>
+                    </div>
+                </div>
+
+                <p class="text-xs text-gray-500 leading-relaxed">
+                    When running in this collaborative environment, the API key is handled automatically. When hosting yourself on GitHub Pages, paste your Google AI Studio API key below.
+                </p>
+
+                <div class="space-y-2">
+                    <input type="password" id="input-gemini-key" placeholder="AIzaSy..." class="w-full rounded-xl bg-gray-50 border border-gray-200 p-2.5 text-xs font-mono text-gray-800 outline-none focus:ring-2 focus:ring-primary">
+                    <button onclick="saveUserApiKey()" class="w-full bg-gray-900 hover:bg-black active:bg-gray-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5">
+                        <i class="ph-bold ph-check"></i> Save Key
+                    </button>
+                </div>
+            </div>
+
+            <!-- Standardized Exercises Management -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+                        <i class="ph-fill ph-book-bookmark text-primary"></i> Master Exercise Library
+                    </h3>
+                    <span id="exercise-count-label" class="text-xs font-bold text-gray-400">0 loaded</span>
+                </div>
+                <p class="text-xs text-gray-500">All standard exercises saved to your phone's catalog:</p>
+                <div id="exercise-tag-cloud" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-gray-50 rounded-xl border border-gray-100">
+                    <!-- Badges -->
+                </div>
+            </div>
+
+            <!-- Data Management & Danger Zone -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-red-100 space-y-3">
+                <h3 class="text-sm font-bold text-red-600 flex items-center gap-2">
+                    <i class="ph-fill ph-trash"></i> Data Management
+                </h3>
+                <p class="text-xs text-gray-500">Download a backup JSON of your workouts or reset your device data.</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="exportWorkoutDataJSON()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1">
+                        <i class="ph-bold ph-download-simple"></i> Backup JSON
+                    </button>
+                    <button onclick="clearAllDeviceData()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1">
+                        <i class="ph-bold ph-warning"></i> Wipe All Logs
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- iOS Native-Styled Bottom Tab Bar -->
+    <nav class="bg-white/95 backdrop-blur-md border-t border-gray-200/80 fixed bottom-0 w-full z-40">
+        <div class="max-w-md mx-auto flex justify-around items-center h-16 px-1">
+            
+            <button onclick="switchTab('log')" id="tab-log" class="tab-active flex flex-col items-center justify-center w-16 gap-1 transition-colors">
+                <i class="ph-fill ph-plus-circle text-2xl"></i>
+                <span class="text-[10px] font-bold">Log</span>
+            </button>
+
+            <button onclick="switchTab('history')" id="tab-history" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
+                <i class="ph ph-clock-counter-clockwise text-2xl"></i>
+                <span class="text-[10px] font-bold">History</span>
+            </button>
+
+            <button onclick="switchTab('progress')" id="tab-progress" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
+                <i class="ph ph-chart-line text-2xl"></i>
+                <span class="text-[10px] font-bold">Progress</span>
+            </button>
+
+            <button onclick="switchTab('coach')" id="tab-coach" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
+                <i class="ph ph-sparkle text-2xl"></i>
+                <span class="text-[10px] font-bold">AI Coach</span>
+            </button>
+
+            <button onclick="switchTab('settings')" id="tab-settings" class="tab-inactive flex flex-col items-center justify-center w-16 gap-1 transition-colors">
+                <i class="ph ph-gear text-2xl"></i>
+                <span class="text-[10px] font-bold">Settings</span>
+            </button>
+
+        </div>
+        <div class="h-safe w-full bg-white"></div>
+    </nav>
+
+    <script>
+        const DEFAULT_EXERCISES = [
+            "Barbell Bench Press",
+            "Incline Dumbbell Press",
+            "Barbell Back Squat",
+            "Front Squat",
+            "Deadlift (Conventional)",
+            "Romanian Deadlift",
+            "Overhead Shoulder Press",
+            "Dumbbell Lateral Raise",
+            "Pull-Up / Chin-Up",
+            "Lat Pulldown",
+            "Barbell Bent-Over Row",
+            "Cable Seated Row",
+            "Leg Press",
+            "Leg Curl (Hamstrings)",
+            "Leg Extension (Quads)",
+            "Calf Raise",
+            "Dumbbell Bicep Curl",
+            "Tricep Rope Pushdown",
+            "Dips",
+            "Plank / Core Hold"
+        ];
+
+        // Core App State
+        let exerciseLibrary = [];
+        let sessionLogs = []; // Array of { id, date, garminCalories, exercises: [{ name, sets, reps, weight }], timestamp }
+        let currentDraftExercises = []; // Exercises currently staged for the active date
+        let volumeChartInstance = null;
+        let caloriesChartInstance = null;
+        let isCustomExerciseMode = false;
+
+        window.onload = function() {
+            initApp();
+        };
+
+        function initApp() {
+            // Default date input to today in local timezone
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('session-date').value = todayStr;
+
+            // Load stored exercise library
+            const savedExercises = localStorage.getItem('fittrack_exercise_library');
+            if (savedExercises) {
+                try {
+                    exerciseLibrary = JSON.parse(savedExercises);
+                } catch(e) {
+                    exerciseLibrary = [...DEFAULT_EXERCISES];
+                }
+            } else {
+                exerciseLibrary = [...DEFAULT_EXERCISES];
+                saveExerciseLibrary();
+            }
+
+            // Load session logs
+            const savedSessions = localStorage.getItem('fittrack_sessions');
+            if (savedSessions) {
+                try {
+                    sessionLogs = JSON.parse(savedSessions);
+                } catch(e) {
+                    sessionLogs = [];
+                }
+            } else {
+                // Migration support: check if old format was used
+                const legacyWorkouts = localStorage.getItem('fittrack_workouts');
+                if (legacyWorkouts) {
+                    try {
+                        const parsedLegacy = JSON.parse(legacyWorkouts);
+                        migrateLegacyData(parsedLegacy);
+                    } catch(e) {
+                        sessionLogs = [];
+                    }
+                }
+            }
+
+            // Load user API key if configured
+            const savedKey = localStorage.getItem('fittrack_gemini_key');
+            if (savedKey) {
+                document.getElementById('input-gemini-key').value = savedKey;
+            }
+
+            // Populate UI components
+            refreshExerciseDropdown();
+            renderDraftList();
+            renderHistoryTab();
+            renderSettingsLibrary();
+            populateChartExerciseFilter();
+        }
+
+        function migrateLegacyData(legacyItems) {
+            const grouped = {};
+            legacyItems.forEach(item => {
+                if (!grouped[item.date]) {
+                    grouped[item.date] = {
+                        id: 'sess_' + item.date.replace(/-/g, '') + '_' + Math.random().toString(36).substr(2, 5),
+                        date: item.date,
+                        garminCalories: 0,
+                        timestamp: item.timestamp || Date.now(),
+                        exercises: []
+                    };
+                }
+                grouped[item.date].exercises.push({
+                    name: item.exercise,
+                    sets: item.sets,
+                    reps: item.reps,
+                    weight: item.weight
+                });
+            });
+            sessionLogs = Object.values(grouped);
+            saveSessionLogs();
+        }
+
+        function saveSessionLogs() {
+            // Sort by date descending
+            sessionLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+            localStorage.setItem('fittrack_sessions', JSON.stringify(sessionLogs));
+            renderHistoryTab();
+            populateChartExerciseFilter();
+            if (!document.getElementById('content-progress').classList.contains('hidden')) {
+                renderCharts();
+            }
+        }
+
+        function saveExerciseLibrary() {
+            exerciseLibrary.sort();
+            localStorage.setItem('fittrack_exercise_library', JSON.stringify(exerciseLibrary));
+            refreshExerciseDropdown();
+            renderSettingsLibrary();
+        }
+
+        function refreshExerciseDropdown() {
+            const select = document.getElementById('input-standard-exercise');
+            const currentSelected = select.value;
+            select.innerHTML = '';
+
+            exerciseLibrary.forEach(exName => {
+                const opt = document.createElement('option');
+                opt.value = exName;
+                opt.textContent = exName;
+                select.appendChild(opt);
+            });
+
+            if (currentSelected && exerciseLibrary.includes(currentSelected)) {
+                select.value = currentSelected;
+            }
+        }
+
+        function toggleCustomExerciseInput() {
+            isCustomExerciseMode = !isCustomExerciseMode;
+            const selectContainer = document.getElementById('select-exercise-container');
+            const customContainer = document.getElementById('custom-exercise-container');
+            const toggleBtn = document.getElementById('btn-toggle-custom');
+
+            if (isCustomExerciseMode) {
+                selectContainer.classList.add('hidden');
+                customContainer.classList.remove('hidden');
+                toggleBtn.textContent = '← Pick from Standard List';
+                document.getElementById('input-custom-exercise').focus();
+            } else {
+                selectContainer.classList.remove('hidden');
+                customContainer.classList.add('hidden');
+                toggleBtn.textContent = '+ New Custom Name';
+            }
+        }
+
+        function addExerciseToDraft() {
+            let exerciseName = '';
+            if (isCustomExerciseMode) {
+                exerciseName = document.getElementById('input-custom-exercise').value.trim();
+                if (!exerciseName) {
+                    showToast('Please enter an exercise name', 'error');
+                    return;
+                }
+                // Save to standardized library if not already present
+                if (!exerciseLibrary.some(e => e.toLowerCase() === exerciseName.toLowerCase())) {
+                    exerciseLibrary.push(exerciseName);
+                    saveExerciseLibrary();
+                }
+            } else {
+                exerciseName = document.getElementById('input-standard-exercise').value;
+            }
+
+            const sets = parseInt(document.getElementById('input-sets').value);
+            const reps = parseInt(document.getElementById('input-reps').value);
+            const weight = parseFloat(document.getElementById('input-weight').value);
+
+            if (isNaN(sets) || sets <= 0) {
+                showToast('Please enter valid number of sets', 'error');
+                return;
+            }
+            if (isNaN(reps) || reps <= 0) {
+                showToast('Please enter valid reps', 'error');
+                return;
+            }
+            if (isNaN(weight) || weight < 0) {
+                showToast('Please enter valid weight (kg)', 'error');
+                return;
+            }
+
+            currentDraftExercises.push({
+                id: 'draft_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+                name: exerciseName,
+                sets: sets,
+                reps: reps,
+                weight: weight
+            });
+
+            // Clear numerical inputs for the next entry
+            document.getElementById('input-sets').value = '';
+            document.getElementById('input-reps').value = '';
+            document.getElementById('input-weight').value = '';
+            if (isCustomExerciseMode) {
+                document.getElementById('input-custom-exercise').value = '';
+                toggleCustomExerciseInput(); // revert to standard dropdown
+            }
+
+            renderDraftList();
+            showToast('Exercise added to draft', 'success');
+        }
+
+        function removeDraftItem(index) {
+            currentDraftExercises.splice(index, 1);
+            renderDraftList();
+        }
+
+        function renderDraftList() {
+            const listEl = document.getElementById('staged-exercises-list');
+            const countBadge = document.getElementById('staged-count-badge');
+            const volBadge = document.getElementById('staged-volume-badge');
+            const commitBtn = document.getElementById('btn-commit-session');
+
+            countBadge.textContent = `${currentDraftExercises.length} exercise${currentDraftExercises.length === 1 ? '' : 's'}`;
+
+            let totalVol = 0;
+            currentDraftExercises.forEach(e => {
+                totalVol += (e.sets * e.reps * e.weight);
+            });
+            volBadge.textContent = `${totalVol.toLocaleString()} kg volume`;
+
+            if (currentDraftExercises.length === 0) {
+                listEl.innerHTML = `
+                    <div class="text-center py-6 text-gray-400 text-xs border border-dashed border-gray-200 rounded-xl">
+                        <i class="ph ph-barbell text-2xl mb-1 opacity-60"></i>
+                        <p>No exercises staged for this session yet.</p>
+                        <p class="text-[10px] text-gray-400 mt-0.5">Use the form above or the AI parser to add items.</p>
+                    </div>
+                `;
+                commitBtn.disabled = true;
+                return;
+            }
+
+            commitBtn.disabled = false;
+            let html = '';
+            currentDraftExercises.forEach((item, index) => {
+                const itemVol = item.sets * item.reps * item.weight;
+                html += `
+                    <div class="bg-gray-50 border border-gray-200/80 rounded-xl p-3 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-gray-800">${item.name}</p>
+                            <p class="text-[11px] text-gray-500 font-medium">
+                                ${item.sets} sets &times; ${item.reps} reps &bull; <span class="font-bold text-gray-700">${item.weight} kg</span>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-[11px] font-bold text-primary">${itemVol.toLocaleString()} kg</span>
+                            <button onclick="removeDraftItem(${index})" class="text-gray-400 hover:text-red-500 p-1">
+                                <i class="ph-bold ph-x text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            listEl.innerHTML = html;
+        }
+
+        function commitFullSession() {
+            const dateVal = document.getElementById('session-date').value;
+            const garminCalVal = parseInt(document.getElementById('session-garmin-calories').value) || 0;
+
+            if (!dateVal) {
+                showToast('Please select a session date', 'error');
+                return;
+            }
+
+            if (currentDraftExercises.length === 0) {
+                showToast('Please add at least one exercise', 'error');
+                return;
+            }
+
+            // Check if a session on this date already exists; if so, offer to merge or update
+            const existingIndex = sessionLogs.findIndex(s => s.date === dateVal);
+            if (existingIndex > -1) {
+                // Merge exercises and update calories if entered
+                sessionLogs[existingIndex].exercises.push(...currentDraftExercises.map(e => ({
+                    name: e.name, sets: e.sets, reps: e.reps, weight: e.weight
+                })));
+                if (garminCalVal > 0) {
+                    sessionLogs[existingIndex].garminCalories = garminCalVal;
+                }
+            } else {
+                sessionLogs.push({
+                    id: 'session_' + Date.now().toString(36),
+                    date: dateVal,
+                    garminCalories: garminCalVal,
+                    timestamp: Date.now(),
+                    exercises: currentDraftExercises.map(e => ({
+                        name: e.name, sets: e.sets, reps: e.reps, weight: e.weight
+                    }))
+                });
+            }
+
+            saveSessionLogs();
+
+            // Clear draft and calorie input
+            currentDraftExercises = [];
+            document.getElementById('session-garmin-calories').value = '';
+            renderDraftList();
+
+            showToast('Workout session saved successfully!', 'success');
+        }
+
+        async function parseNaturalLanguageWorkout() {
+            const inputField = document.getElementById('ai-quicklog-input');
+            const textPrompt = inputField.value.trim();
+            const btn = document.getElementById('btn-parse-ai');
+
+            if (!textPrompt) {
+                showToast('Please type or dictate your workout', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<div class="spinner text-indigo-600"></div>`;
+
+            // Leave apiKey as empty string or local override
+            const userApiKey = localStorage.getItem('fittrack_gemini_key') || "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${userApiKey}`;
+
+            const systemInstruction = `You are a gym workout parsing specialist.
+Extract exercises, sets, repetitions, and weight in kg from the user's freeform text.
+If total Garmin calories burned for the day (active + resting burn) are mentioned, extract that as integer in garminCalories (0 if not mentioned).
+Map exercise names to clear standardized names (e.g. 'Bench Press', 'Barbell Squat', 'Pull-Up').`;
+
+            const payload = {
+                contents: [{ parts: [{ text: textPrompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "garminCalories": { "type": "INTEGER" },
+                            "exercises": {
+                                "type": "ARRAY",
+                                "items": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "name": { "type": "STRING" },
+                                        "sets": { "type": "INTEGER" },
+                                        "reps": { "type": "INTEGER" },
+                                        "weight": { "type": "NUMBER" }
+                                    },
+                                    "required": ["name", "sets", "reps", "weight"]
+                                }
+                            }
+                        },
+                        "required": ["exercises"]
+                    }
+                }
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (jsonText) {
+                    const parsed = JSON.parse(jsonText);
+                    
+                    if (parsed.garminCalories && parsed.garminCalories > 0) {
+                        document.getElementById('session-garmin-calories').value = parsed.garminCalories;
+                    }
+
+                    if (parsed.exercises && parsed.exercises.length > 0) {
+                        parsed.exercises.forEach(ex => {
+                            // Ensure name exists in library
+                            if (!exerciseLibrary.some(e => e.toLowerCase() === ex.name.toLowerCase())) {
+                                exerciseLibrary.push(ex.name);
+                            }
+                            currentDraftExercises.push({
+                                id: 'draft_' + Math.random().toString(36).substr(2, 6),
+                                name: ex.name,
+                                sets: ex.sets || 3,
+                                reps: ex.reps || 10,
+                                weight: ex.weight || 0
+                            });
+                        });
+                        saveExerciseLibrary();
+                        renderDraftList();
+                        inputField.value = '';
+                        showToast(`Parsed ${parsed.exercises.length} exercises!`, 'success');
+                    } else {
+                        showToast('Could not find exercises in that text', 'error');
+                    }
+                } else {
+                    throw new Error(result.error?.message || "Invalid LLM response");
+                }
+            } catch(e) {
+                console.error("AI Parse Error:", e);
+                showToast('AI parser error: ' + (e.message || 'Failed to parse'), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="ph-bold ph-magic-wand"></i><span>Parse</span>`;
+            }
+        }
+
+        function renderHistoryTab() {
+            const container = document.getElementById('history-grouped-container');
+            const totalLabel = document.getElementById('history-total-sessions');
+
+            totalLabel.textContent = `${sessionLogs.length} session${sessionLogs.length === 1 ? '' : 's'}`;
+
+            if (sessionLogs.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">
+                        <i class="ph ph-calendar-blank text-4xl text-gray-300 mb-2"></i>
+                        <p class="text-sm font-semibold text-gray-600">No workout history yet</p>
+                        <p class="text-xs text-gray-400 mt-0.5">Your logged daily sessions will appear here.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            sessionLogs.forEach((session, sessionIdx) => {
+                let sessionVolume = 0;
+                session.exercises.forEach(e => {
+                    sessionVolume += (e.sets * e.reps * e.weight);
+                });
+
+                const formattedDate = new Date(session.date + 'T00:00:00').toLocaleDateString(undefined, {
+                    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                });
+
+                html += `
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+                        <div class="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                            <div>
+                                <span class="text-xs font-black text-gray-900">${formattedDate}</span>
+                                <p class="text-[11px] text-gray-400 font-medium">${session.exercises.length} exercises logged</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                ${session.garminCalories > 0 ? `
+                                    <span class="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100 flex items-center gap-1" title="Garmin Total Daily Burn (Active + Resting)">
+                                        <i class="ph-fill ph-flame text-sky-500"></i> ${session.garminCalories.toLocaleString()} kcal total
+                                    </span>
+                                ` : ''}
+                                <span class="text-xs font-bold text-primary bg-indigo-50 px-2 py-0.5 rounded-md">
+                                    ${sessionVolume.toLocaleString()} kg
+                                </span>
+                                <button onclick="deleteSession(${sessionIdx})" class="text-gray-300 hover:text-red-500 p-1">
+                                    <i class="ph-bold ph-trash text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Exercise details table -->
+                        <div class="space-y-1.5">
+                            ${session.exercises.map(ex => `
+                                <div class="flex justify-between items-center text-xs py-1 border-b border-gray-50 last:border-0">
+                                    <span class="font-semibold text-gray-700">${ex.name}</span>
+                                    <div class="text-gray-500">
+                                        <span class="font-medium">${ex.sets} &times; ${ex.reps}</span> 
+                                        <span class="text-gray-300 mx-1">@</span> 
+                                        <span class="font-bold text-gray-800">${ex.weight} kg</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function deleteSession(index) {
+            sessionLogs.splice(index, 1);
+            saveSessionLogs();
+            showToast('Session deleted', 'success');
+        }
+
+        function populateChartExerciseFilter() {
+            const select = document.getElementById('chart-exercise-filter');
+            const currentVal = select.value;
+            
+            // Gather all exercises present in history
+            const present = new Set();
+            sessionLogs.forEach(s => {
+                s.exercises.forEach(e => present.add(e.name));
+            });
+
+            const sorted = Array.from(present).sort();
+            let options = '<option value="ALL">Total Overall Volume (All Exercises)</option>';
+            sorted.forEach(name => {
+                options += `<option value="${name}">${name}</option>`;
+            });
+
+            select.innerHTML = options;
+            if (sorted.includes(currentVal)) {
+                select.value = currentVal;
+            }
+        }
+
+        function renderCharts() {
+            const filter = document.getElementById('chart-exercise-filter').value;
+            const volumeEmpty = document.getElementById('volume-empty-state');
+            const caloriesEmpty = document.getElementById('calories-empty-state');
+            const volSummary = document.getElementById('chart-volume-summary');
+            const calSummary = document.getElementById('chart-calories-summary');
+
+            if (sessionLogs.length === 0) {
+                volumeEmpty.classList.remove('hidden');
+                caloriesEmpty.classList.remove('hidden');
+                if (volumeChartInstance) volumeChartInstance.destroy();
+                if (caloriesChartInstance) caloriesChartInstance.destroy();
+                return;
+            }
+
+            // Group dates in chronological order (oldest to newest)
+            const chronological = [...sessionLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            const labels = [];
+            const volumeData = [];
+            const calorieData = [];
+
+            let totalVolumeSum = 0;
+            let activeGarminDays = 0;
+            let totalCaloriesSum = 0;
+
+            chronological.forEach(s => {
+                const dateLabel = new Date(s.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+                
+                let dayVolume = 0;
+                s.exercises.forEach(e => {
+                    if (filter === 'ALL' || e.name === filter) {
+                        dayVolume += (e.sets * e.reps * e.weight);
+                    }
+                });
+
+                labels.push(dateLabel);
+                volumeData.push(dayVolume);
+                calorieData.push(s.garminCalories || 0);
+
+                totalVolumeSum += dayVolume;
+                if (s.garminCalories > 0) {
+                    activeGarminDays++;
+                    totalCaloriesSum += s.garminCalories;
+                }
+            });
+
+            volSummary.textContent = `${totalVolumeSum.toLocaleString()} kg total`;
+            calSummary.textContent = activeGarminDays > 0 ? `${Math.round(totalCaloriesSum / activeGarminDays)} kcal avg` : 'No Garmin data';
+
+            // 1. Lift Volume Line Chart
+            volumeEmpty.classList.add('hidden');
+            const volCtx = document.getElementById('volumeChart').getContext('2d');
+            if (volumeChartInstance) volumeChartInstance.destroy();
+
+            volumeChartInstance = new Chart(volCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Volume (kg)',
+                        data: volumeData,
+                        borderColor: '#4F46E5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.35,
+                        pointBackgroundColor: '#FFFFFF',
+                        pointBorderColor: '#4F46E5',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 } } },
+                        x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                    }
+                }
+            });
+
+            // 2. Garmin Calorie Bar Chart
+            const hasCalories = calorieData.some(c => c > 0);
+            if (!hasCalories) {
+                caloriesEmpty.classList.remove('hidden');
+                if (caloriesChartInstance) caloriesChartInstance.destroy();
+            } else {
+                caloriesEmpty.classList.add('hidden');
+                const calCtx = document.getElementById('garminCalorieChart').getContext('2d');
+                if (caloriesChartInstance) caloriesChartInstance.destroy();
+
+                caloriesChartInstance = new Chart(calCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Garmin Calories',
+                            data: calorieData,
+                            backgroundColor: '#0284C7',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 } } },
+                            x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function requestAIFeature(mode) {
+            const userApiKey = localStorage.getItem('fittrack_gemini_key') || "";
+            const customQuery = document.getElementById('ai-custom-prompt').value.trim();
+
+            const responseBox = document.getElementById('ai-response-box');
+            const idleState = document.getElementById('ai-idle-state');
+            const loadingState = document.getElementById('ai-loading-state');
+            const resultContent = document.getElementById('ai-result-content');
+            const titleEl = document.getElementById('ai-response-title');
+
+            idleState.classList.add('hidden');
+            resultContent.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+            loadingState.classList.add('flex');
+
+            // Package recent workout summary (last 10 sessions)
+            const recentSessions = sessionLogs.slice(0, 10).map(s => {
+                const exList = s.exercises.map(e => `${e.name}: ${e.sets}x${e.reps} @ ${e.weight}kg`).join(', ');
+                return `Date: ${s.date} | Garmin Burn: ${s.garminCalories || 'N/A'} kcal | Exercises: [${exList}]`;
+            }).join('\n');
+
+            let systemPrompt = "";
+            let userPrompt = "";
+
+            if (mode === 'next_workout') {
+                titleEl.textContent = "AI Next Session Plan";
+                systemPrompt = `You are an elite strength and conditioning coach.
+Analyze the user's recent workout logs. Suggest an optimal workout session to perform next (Push, Pull, Legs, or targeted upper/lower).
+Specify exercise names, target sets, rep ranges, recommended load progression, and warm-up recommendations.
+Format using clean Markdown with bold exercise names and bullet points.`;
+                userPrompt = `Here is my recent workout history:\n${recentSessions || 'No history logged yet.'}\n${customQuery ? 'Additional user request: ' + customQuery : ''}`;
+            } else if (mode === 'garmin_recovery') {
+                titleEl.textContent = "Garmin Recovery & Energy Analysis";
+                systemPrompt = `You are a sports nutritionist and recovery physiologist.
+Evaluate the user's lifting volume against their daily Garmin calorie expenditure.
+Assess if they are in an aggressive deficit risking muscle loss, provide target post-workout carbohydrate & protein grams, and hydration/sleep recovery rules.
+Format with clean Markdown, concise bullet points, and practical action items.`;
+                userPrompt = `Here is my workout history including daily Garmin calorie burn values:\n${recentSessions || 'No history logged yet.'}\n${customQuery ? 'Specific question: ' + customQuery : ''}`;
+            } else if (mode === 'exercise_sub') {
+                titleEl.textContent = "Smart Exercise Substitutions";
+                systemPrompt = `You are a certified biomechanics specialist and fitness trainer.
+Provide 3 joint-friendly or gym-equipment alternatives for common compound exercises, including key setup cues to avoid injury and maximize hypertrophy.
+Format with clean Markdown with bold cues.`;
+                userPrompt = `Here is my exercise list:\n${exerciseLibrary.join(', ')}\nUser specific need: ${customQuery || 'Provide joint-friendly alternatives and cues for Squats, Bench Press, and Overhead Press.'}`;
+            }
+
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${userApiKey}`;
+                
+                const payload = {
+                    contents: [{ parts: [{ text: userPrompt }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] }
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const aiText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (aiText) {
+                    resultContent.innerHTML = marked.parse(aiText);
+                    loadingState.classList.add('hidden');
+                    loadingState.classList.remove('flex');
+                    resultContent.classList.remove('hidden');
+                    showToast('AI Coach updated!', 'success');
+                } else {
+                    throw new Error(result.error?.message || "Invalid response format from Gemini");
+                }
+            } catch(e) {
+                console.error("Gemini Coach Error:", e);
+                loadingState.classList.add('hidden');
+                loadingState.classList.remove('flex');
+                resultContent.innerHTML = `
+                    <div class="p-3 bg-red-50 text-red-600 rounded-xl text-xs">
+                        <strong>Error calling Gemini API:</strong> ${e.message || 'Please check your connection'}
+                    </div>
+                `;
+                resultContent.classList.remove('hidden');
+            }
+        }
+
+        function copyAIResponse() {
+            const content = document.getElementById('ai-result-content');
+            if (!content.innerText) return;
+
+            const temp = document.createElement('textarea');
+            temp.value = content.innerText;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast('Copied to clipboard!', 'success');
+        }
+
+        function saveUserApiKey() {
+            const keyVal = document.getElementById('input-gemini-key').value.trim();
+            localStorage.setItem('fittrack_gemini_key', keyVal);
+            showToast('API Key saved to device', 'success');
+        }
+
+        function renderSettingsLibrary() {
+            const container = document.getElementById('exercise-tag-cloud');
+            const countLabel = document.getElementById('exercise-count-label');
+            countLabel.textContent = `${exerciseLibrary.length} exercises`;
+
+            container.innerHTML = exerciseLibrary.map(name => `
+                <span class="inline-flex items-center gap-1 bg-white text-gray-700 text-[10px] font-semibold px-2 py-1 rounded-md border border-gray-200">
+                    ${name}
+                </span>
+            `).join('');
+        }
+
+        function exportWorkoutDataJSON() {
+            const dataToExport = {
+                exportDate: new Date().toISOString(),
+                exerciseLibrary: exerciseLibrary,
+                sessionLogs: sessionLogs
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `FitTrack_Backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('Backup downloaded', 'success');
+        }
+
+        function clearAllDeviceData() {
+            sessionLogs = [];
+            currentDraftExercises = [];
+            localStorage.removeItem('fittrack_sessions');
+            localStorage.removeItem('fittrack_workouts');
+            renderDraftList();
+            renderHistoryTab();
+            populateChartExerciseFilter();
+            renderCharts();
+            showToast('All workouts deleted from device', 'error');
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.add('hidden');
+                el.classList.remove('block');
+            });
+
+            document.querySelectorAll('nav button').forEach(btn => {
+                btn.classList.remove('tab-active');
+                btn.classList.add('tab-inactive');
+                const icon = btn.querySelector('i');
+                icon.classList.remove('ph-fill');
+                icon.classList.add('ph');
+            });
+
+            const activeContent = document.getElementById(`content-${tabId}`);
+            if (activeContent) {
+                activeContent.classList.remove('hidden');
+                activeContent.classList.add('block');
+            }
+
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('tab-inactive');
+                activeBtn.classList.add('tab-active');
+                const icon = activeBtn.querySelector('i');
+                icon.classList.remove('ph');
+                icon.classList.add('ph-fill');
+            }
+
+            if (tabId === 'progress') {
+                renderCharts();
+            }
+        }
+
+        let toastTimeout = null;
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast-banner');
+            const text = document.getElementById('toast-message');
+            const icon = document.getElementById('toast-icon');
+
+            text.textContent = msg;
+            if (type === 'error') {
+                icon.className = "ph-bold ph-warning-circle text-rose-400 text-base";
+            } else {
+                icon.className = "ph-bold ph-check-circle text-emerald-400 text-base";
+            }
+
+            toast.classList.remove('-translate-y-10', 'opacity-0', 'pointer-events-none');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('-translate-y-10', 'opacity-0', 'pointer-events-none');
+                toast.classList.remove('translate-y-0', 'opacity-100');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
