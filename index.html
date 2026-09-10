@@ -75,7 +75,12 @@
         .prose li { margin-bottom: 0.25rem; }
         .prose strong { color: #111827; font-weight: 600; }
 
-        .content-area { padding-bottom: 100px; }
+        .content-area { 
+            padding-bottom: calc(140px + env(safe-area-inset-bottom, 24px)) !important; 
+        }
+        .safe-bottom-nav {
+            padding-bottom: env(safe-area-inset-bottom, 10px);
+        }
     </style>
 </head>
 <body class="text-gray-800 antialiased h-screen flex flex-col overflow-hidden selection:bg-indigo-100">
@@ -244,6 +249,8 @@
                 </button>
             </div>
 
+            <!-- Extra scroll margin to keep Save button comfortably above iOS tab bar -->
+            <div class="h-12 w-full"></div>
         </div>
 
         <!-- ============================================== -->
@@ -489,7 +496,7 @@
     </main>
 
     <!-- iOS Native-Styled Bottom Tab Bar -->
-    <nav class="bg-white/95 backdrop-blur-md border-t border-gray-200/80 fixed bottom-0 w-full z-40">
+    <nav class="bg-white/95 backdrop-blur-md border-t border-gray-200/80 fixed bottom-0 w-full z-40 safe-bottom-nav">
         <div class="max-w-md mx-auto flex justify-around items-center h-16 px-1">
             
             <button onclick="switchTab('log')" id="tab-log" class="tab-active flex flex-col items-center justify-center w-16 gap-1 transition-colors">
