@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="en" class="h-full bg-slate-50">
 <head>
     <meta charset="UTF-8">
@@ -1174,13 +1174,35 @@
         }
 
         async function requestAIFeature(mode) {
-            const userApiKey = localStorage.getItem('fittrack_gemini_key') || "";
+            const userApiKey = (localStorage.getItem('fittrack_gemini_key') || "").trim();
             const customQuery = document.getElementById('ai-custom-prompt').value.trim();
 
             const idleState = document.getElementById('ai-idle-state');
             const loadingState = document.getElementById('ai-loading-state');
             const resultContent = document.getElementById('ai-result-content');
             const titleEl = document.getElementById('ai-response-title');
+
+            if (!userApiKey) {
+                idleState.classList.add('hidden');
+                loadingState.classList.add('hidden');
+                loadingState.classList.remove('flex');
+                resultContent.innerHTML = `
+                    <div class="p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs space-y-2.5">
+                        <div class="flex items-center gap-2 font-bold text-amber-950">
+                            <i class="ph-bold ph-key text-base text-amber-600"></i>
+                            <span>Gemini API Key Required</span>
+                        </div>
+                        <p class="leading-relaxed">
+                            Google requires a free Gemini API key to run AI coaching requests. It takes less than a minute to create one and save it on your phone.
+                        </p>
+                        <button onclick="switchTab('settings')" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs transition active:scale-[0.98] flex items-center justify-center gap-1.5">
+                            <i class="ph-bold ph-gear"></i> Open Settings to Enter Key
+                        </button>
+                    </div>
+                `;
+                resultContent.classList.remove('hidden');
+                return;
+            }
 
             idleState.classList.add('hidden');
             resultContent.classList.add('hidden');
@@ -1228,7 +1250,7 @@ Format with clean Markdown.`;
             }
 
             try {
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${userApiKey}`;
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${userApiKey}`;
                 const payload = {
                     contents: [{ parts: [{ text: userPrompt }] }],
                     systemInstruction: { parts: [{ text: systemPrompt }] }
