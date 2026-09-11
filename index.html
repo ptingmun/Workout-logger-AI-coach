@@ -1250,20 +1250,44 @@ Format with clean Markdown.`;
             }
 
             try {
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${userApiKey}`;
+                // Primary model requested by the API deprecation notice, with resilient fallbacks
+                const modelsToTry = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3-flash-preview'];
+                let aiText = null;
+                let lastError = null;
+
                 const payload = {
                     contents: [{ parts: [{ text: userPrompt }] }],
                     systemInstruction: { parts: [{ text: systemPrompt }] }
                 };
 
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                for (const model of modelsToTry) {
+                    try {
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${userApiKey}`;
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
 
-                const result = await response.json();
-                const aiText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const result = await response.json();
+
+                        if (result.error) {
+                            // If model is deprecated or not found (404), continue to next fallback candidate
+                            if (result.error.code === 404 || (result.error.message && result.error.message.includes('no longer available'))) {
+                                lastError = result.error.message;
+                                continue;
+                            }
+                            throw new Error(result.error.message);
+                        }
+
+                        aiText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (aiText) {
+                            break; // Successfully received response
+                        }
+                    } catch (err) {
+                        lastError = err.message;
+                    }
+                }
 
                 if (aiText) {
                     resultContent.innerHTML = marked.parse(aiText);
@@ -1272,7 +1296,7 @@ Format with clean Markdown.`;
                     resultContent.classList.remove('hidden');
                     showToast('Coach analysis ready', 'success');
                 } else {
-                    throw new Error(result.error?.message || "Please add your Gemini API Key in Settings to enable the AI coach.");
+                    throw new Error(lastError || "Could not generate recommendation. Please check your Gemini API Key in Settings.");
                 }
             } catch(e) {
                 loadingState.classList.add('hidden');
